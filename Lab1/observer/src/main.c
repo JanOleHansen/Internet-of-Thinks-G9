@@ -12,12 +12,9 @@ bool parse_adv_data(struct bt_data *data, void *user_data) {
     // Print the raw advertising data in hexadecimal format
     // if manufacturer specific data is received, print the data type, length, and content
     if (data->type == BT_DATA_MANUFACTURER_DATA) {
-        printk("Data type: 0x%02X, Data length: %d, Data: ", data->type, data->data_len);
-        for (int i = 0; i < data->data_len; i++) {
-            printk("%02X ", data->data[i]);
-        }
-        printk("\n");
-        
+        printk("Data type: 0x%02X, Data length: %d, Data: \n", data->type, data->data_len);
+        printk("The temperature is %d C\n", data->data[2]);
+        printk("The custom message is: %.*s\n", 3, &data->data[3]);
     }
     return true; // Return true to continue parsing other data fields
 }

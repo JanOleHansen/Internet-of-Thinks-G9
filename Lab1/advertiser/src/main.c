@@ -1,5 +1,7 @@
 #include <zephyr.h>
-
+#include <sys/printk.h>
+// include uint8_t, size_t
+#include <stdint.h>
 #include <zephyr/types.h>
 #include <stddef.h>
 #include <sys/printk.h>
@@ -7,11 +9,21 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 
+// Struct for manufacturer data
+struct mfg_data {
+    uint16_t company_id; // Company Identifier Code (2 bytes)
+    uint8_t temperature; // Temperature data (1 byte)
+    char message[3]; // Custom message (5 bytes)
+};
 // Manufacturer specific data (0xFF) with 3 bytes of data
-static uint8_t mfg_data[] = { 0xff, 0xff, 0x00 };
+static struct mfg_data my_mfg_data = {
+    .company_id = 0xFFFF, // Example company ID (0xFFFF is reserved for testing)
+    .temperature = 30, // Example temperature value
+    .message = "Hot" // Example custom message
+};
 // Set Advertisement data with manufacturer specific data
 const struct bt_data ad[] = {
-    BT_DATA(BT_DATA_MANUFACTURER_DATA, mfg_data, 3)
+    BT_DATA(BT_DATA_MANUFACTURER_DATA, &my_mfg_data, sizeof(my_mfg_data))
 };
 
 int main(void)
@@ -25,9 +37,14 @@ int main(void)
     printk("Bluetooth initialized\n");
     do {
         k_msleep(1000); /* Wait for 1 second before sending advertising data */
-        printk("Sending advertising data: 0x%02X\n", mfg_data[2]);
+        printk("Sending advertising data: Temperature %d C\n", my_mfg_data.temperature);
+        printk("Sending advertising data: Custom message: %s\n", my_mfg_data.message);
         /* Start non-connectable advertising (broadcast); no scan response */
         err = bt_le_adv_start(BT_LE_ADV_NCONN, ad, ARRAY_SIZE(ad), NULL, 0);
+        if (err) {
+            printk("Advertising failed to start (err %d)\n", err);
+            return 0;
+        }
         /* Send advertising data for 1 second */
         k_msleep(1000);
         /* Stop advertising */
@@ -36,7 +53,8 @@ int main(void)
             printk("Advertising failed to stop (err %d)\n", err);
             return 0;
         }
-        mfg_data[2]++;
+        printk("Now the temperature is raised by 1 degree Celsius\n");
+        my_mfg_data.temperature += 1; // Increment temperature for next advertising cycle
     } while (1);
     return 0;
 }
