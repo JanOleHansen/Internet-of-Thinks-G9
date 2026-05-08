@@ -36,7 +36,7 @@ int main(void)
     }
     printk("Bluetooth initialized\n");
     do {
-        k_msleep(1000); /* Wait for 1 second before sending advertising data */
+        k_msleep(100); /* Wait for 0.1 second before sending advertising data */
         printk("Sending advertising data: Temperature %d C\n", my_mfg_data.temperature);
         printk("Sending advertising data: Custom message: %s\n", my_mfg_data.message);
         /* Start non-connectable advertising (broadcast); no scan response */
@@ -45,8 +45,8 @@ int main(void)
             printk("Advertising failed to start (err %d)\n", err);
             return 0;
         }
-        /* Send advertising data for 1 second */
-        k_msleep(1000);
+        /* Send advertising data for 0.5 second */
+        k_msleep(500);
         /* Stop advertising */
         err = bt_le_adv_stop();
         if (err) {

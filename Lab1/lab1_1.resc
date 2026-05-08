@@ -6,7 +6,7 @@ $device1_bin?=$ORIGIN/advertiser/.pio/build/nrf52840_dk/firmware.elf		# update t
 $device2_bin?=$ORIGIN/observer/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
 
 emulation CreateBLEMedium "wireless"
-# wireless SetRangeLossWirelessFunction 10 1.0 0.6		# uncomment this line to introduce probabilistic packet loss for Part 3
+wireless SetRangeLossWirelessFunction 10 1.0 0.6		# uncomment this line to introduce probabilistic packet loss for Part 3
 
 emulation CreateServerSocketTerminal 60001 "term1" false
 emulation CreateServerSocketTerminal 60002 "term2" false
