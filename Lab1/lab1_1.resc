@@ -2,7 +2,7 @@
 :description: Simulation script for IoT lab 1
 
 using sysbus
-$device1_bin?=$ORIGIN/advertiser/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
+$device1_bin?=$ORIGIN/broadcaster/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
 $device2_bin?=$ORIGIN/observer/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
 
 emulation CreateBLEMedium "wireless"
@@ -13,7 +13,7 @@ emulation CreateServerSocketTerminal 60002 "term2" false
 
 # Create device1
 
-mach create "advertiser"
+mach create "broadcaster"
 machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
 connector Connect sysbus.radio wireless
 wireless SetPosition radio 0 0 0						# change position here for Part 3, the last three values are <x> <y> <z> coordinates
@@ -38,7 +38,7 @@ emulation SetGlobalQuantum "0.00001"
 
 macro reset
 """
-    mach set "advertiser"
+    mach set "broadcaster"
     sysbus LoadELF $device1_bin
 	
     mach set "observer"

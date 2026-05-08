@@ -54,7 +54,7 @@ def main(duration=60, label="run"):
 
     t1 = threading.Thread(
         target=read_socket,
-        args=(ADVERTISER_PORT, "advertiser", sent_re, sent_packets),
+        args=(ADVERTISER_PORT, "broadcaster", sent_re, sent_packets),
         daemon=True,
     )
 
