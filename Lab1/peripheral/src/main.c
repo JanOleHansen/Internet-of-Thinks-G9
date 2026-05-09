@@ -22,31 +22,35 @@
 
 
 /* Custom Service Variables */
-#define BT_UUID_CUSTOM_SERVICE_VAL \
+// Define the custom service UUID (128-bit) 12345678-1234-5678-1234-56789abcdef0
+#define BT_UUID_HELLO_PRIMARY_VAL \
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
+#define BT_UUID_SENSOR_PRIMARY_VAL \
+    BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef3)
 
 #define VND_MAX_LEN 20
 
-// vnd_value is the value of the custom characteristic, initialized with "Vendor"
-static uint8_t vnd_value[VND_MAX_LEN + 1] = { 'V', 'e', 'n', 'd', 'o', 'r'};
+// vnd_value is the value of the custom characteristic, initialized with "Hello World"
+static uint8_t hello1_value[VND_MAX_LEN + 1] = { 'H', 'e', 'l', 'l', 'o', ' ', 
+    'W', 'o', 'r', 'l', 'd'};
 
+static uint8_t hello2_value[VND_MAX_LEN + 1] = { 'Z', 'e', 'p', 'h', 'y', 'r', ' ', 
+    'R', 'T', 'O', 'S'};
+
+static uint8_t sensor_value[1] = {42}; // Example sensor value
 // Custom Characteristic UUID
-static const struct bt_uuid_128 vnd_enc_uuid = BT_UUID_INIT_128(
+static struct bt_uuid_128 hello1_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1));
 
-/*// Custom Characteristic UUID
-static const struct bt_uuid_128 vnd_auth_uuid = BT_UUID_INIT_128(
+static struct bt_uuid_128 hello2_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef2));
-*/
 
-// Advertisement data
+static struct bt_uuid_128 sensor_uuid = BT_UUID_INIT_128( 
+    BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef4));
+
+// Advertisement data: Send name and flags 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_CUSTOM_SERVICE_VAL),
-};
-
-// Scan response data
-static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
@@ -54,18 +58,39 @@ static const struct bt_data sd[] = {
 static ssize_t read_vnd(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			void *buf, uint16_t len, uint16_t offset)
 {
-	const char *value = attr->user_data;
-
+	// The value of the characteristic is stored in the user_data field of the attribute
+    const char *value = attr->user_data;
+    // Helper function to read the characteristic value and return it in the buffer
+    // provided by the caller
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, value,
 				 strlen(value));
 }
 
+static ssize_t read_sensor(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+            void *buf, uint16_t len, uint16_t offset)
+{
+    const uint8_t *value = attr->user_data;
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, value,
+                 sizeof(sensor_value));
+}
 
 // Vendor Primary Service Declaration
-BT_GATT_SERVICE_DEFINE(vnd_svc,
-    BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_CUSTOM_SERVICE_VAL)),
-    BT_GATT_CHARACTERISTIC(&vnd_enc_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ, 
-        read_vnd, NULL, vnd_value)
+BT_GATT_SERVICE_DEFINE(hello_svc,
+    BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_HELLO_PRIMARY_VAL)),
+    // Characteristic belongs to the primary service, has read property and permission, 
+    // and uses read_vnd as the read callback function
+    BT_GATT_CHARACTERISTIC(&hello1_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ, 
+        read_vnd, NULL, hello1_value),
+    BT_GATT_CHARACTERISTIC(&hello2_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ,
+        read_vnd, NULL, hello2_value),
+);
+
+BT_GATT_SERVICE_DEFINE(sensor_svc,
+    BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_SENSOR_PRIMARY_VAL)),
+    // Characteristic belongs to the primary service, has read property and permission, 
+    // and uses read_vnd as the read callback function
+    BT_GATT_CHARACTERISTIC(&sensor_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ,
+        read_sensor, NULL, sensor_value),
 );
 
 // Callback function for connection events
@@ -97,7 +122,7 @@ static void bt_ready(void)
 {
 	int err;
     // Start advertising with connectivity
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
 		return;
@@ -108,11 +133,8 @@ static void bt_ready(void)
 
 
 int main(void)
-{
-    // Objects for GATT service and characteristic
-    struct bt_gatt_attr *vnd_ind_attr;
-	char str[BT_UUID_STR_LEN];
-	int err;
+{    
+    int err;
     // Initialize the Bluetooth Subsystem (synchronous)
     err = bt_enable(NULL);
     if (err) {
@@ -122,10 +144,6 @@ int main(void)
     printk("Bluetooth initialized\n");
 	bt_conn_cb_register(&conn_callbacks);
     bt_ready();
-    vnd_ind_attr = bt_gatt_find_by_uuid(vnd_svc.attrs, vnd_svc.attr_count,
-					    &vnd_enc_uuid.uuid);
-    bt_uuid_to_str(&vnd_enc_uuid.uuid, str, sizeof(str));
-	printk("Indicate VND attr %p (UUID %s)\n", vnd_ind_attr, str);
     while (1) {
 		k_msleep(1000);
 	}   
