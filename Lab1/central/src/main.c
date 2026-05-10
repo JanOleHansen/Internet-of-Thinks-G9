@@ -80,8 +80,8 @@ static void read_next_characteristic(struct bt_conn *conn)
             printk("Read started successfully\n");
         }
 
+    // Sensor service is found, read its characteristics    
     } else if (sensor_service_found) {
-        // Sensor service is found, read its characteristics
         if (read_index >= chrc_sensor_count) {
             printk("All characteristics of the sensor service read\n");
             return;
@@ -132,21 +132,21 @@ static uint8_t read_characteristics(struct bt_conn *conn, uint8_t err,
 }
 
 static void discover_next_service_characteristics(struct bt_conn *conn) {
+    if (service_index >= MAX_SERVICES) {
+        printk("All services discovered\n");
+        return;
+    }
+    
     if (hello_service_found && first_call){
         service_index = 0;
         first_call = false;
     } else if (sensor_service_found) {
         service_index = 1;
     }
-    if (service_index >= MAX_SERVICES) {
-        printk("All services discovered\n");
-        return;
-    }
     discover_params.func = discover_func;
     discover_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
     discover_params.start_handle = service_ranges[service_index].start;
     discover_params.end_handle = service_ranges[service_index].end;
-
     int err = bt_gatt_discover(conn, &discover_params);
     if (err) {
         printk("Discover failed(err %d)\n", err);
@@ -179,19 +179,17 @@ static uint8_t discover_func(struct bt_conn *conn,
     // Check if Primary Service is found
     if (params->type == BT_GATT_DISCOVER_PRIMARY) {
         printk("Primary Service found at handle %u\n", attr->handle);        
+        // UUID matches the expected hello service UUID or sensor service UUID
+        // Save range for the search of characteristics
         struct bt_gatt_service_val *service = attr->user_data;
         if (bt_uuid_cmp(service->uuid, &hello_uuid.uuid) == 0) {
-            // UUID matches the expected hello service UUID
             hello_service_found = true;
             printk("Discovered service is the hello service\n");
-            // Save range for the search of characteristics
             service_ranges[0].start = attr->handle + 1;
             service_ranges[0].end = service->end_handle;
         } else if (bt_uuid_cmp(service->uuid, &sensor_uuid.uuid) == 0) {
-            // UUID matches the expected sensor service UUID
             sensor_service_found = true;
             printk("Discovered service is the sensor service\n");
-            // Save range for the search of characteristics
             service_ranges[1].start = attr->handle + 1;
             service_ranges[1].end = service->end_handle;
         } else {
@@ -199,16 +197,13 @@ static uint8_t discover_func(struct bt_conn *conn,
         }
     // Check if Characteristic is found
     } else if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
+        // Save the characteristic handle for later reading
         if (service_index == 0){
             struct bt_gatt_chrc *chrc_hello = attr->user_data;
-            printk("Characteristic found at handle %u\n", chrc_hello->value_handle);
-            // Save the characteristic handle for later reading
             chrc_hello_handles[chrc_hello_count++] = chrc_hello->value_handle;
             return BT_GATT_ITER_CONTINUE;
         } else if (service_index == 1) {
             struct bt_gatt_chrc *chrc_sensor = attr->user_data;
-            printk("Characteristic found at handle %u\n", chrc_sensor->value_handle);
-            // Save the characteristic handle for later reading
             chrc_sensor_handles[chrc_sensor_count++] = chrc_sensor->value_handle;
             return BT_GATT_ITER_CONTINUE;
         } else {
@@ -261,12 +256,11 @@ static struct bt_conn_cb conn_callbacks = {
 };
 
 // Callback function to parse and print received advertising data and scan response data
+// Print data in readable format
+// Check if the device name matches "peripheral"
 bool parse_adv_data(struct bt_data *data, void *user_data) {
-    // Print data in readable format
-    // Check if scan response data is received
     if (data->type == BT_DATA_NAME_COMPLETE) {
         printk("Device Name: %.*s\n", data->data_len, data->data);
-        // Check if the device name matches "peripheral"
         if (strncmp((char *)data->data, "peripheral", data->data_len) == 0) {
             printk("Found target device: %.*s\n", data->data_len, data->data);
             peripheral_found = true;

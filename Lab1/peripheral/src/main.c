@@ -21,30 +21,29 @@
 #include <bluetooth/gatt.h>
 
 
-/* Custom Service Variables */
-// Define the custom service UUID (128-bit) 12345678-1234-5678-1234-56789abcdef0
+
+// Define the UUID (128-bit) 12345678-1234-5678-1234-56789abcdef0 for the "hello" service
+// Define the UUID (128-bit) 12345678-1234-5678-1234-56789abcdef3 for the "sensor" service 
 #define BT_UUID_HELLO_PRIMARY_VAL \
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
 #define BT_UUID_SENSOR_PRIMARY_VAL \
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef3)
 
-#define VND_MAX_LEN 20
 
-// vnd_value is the value of the custom characteristic, initialized with "Hello World"
-static uint8_t hello1_value[VND_MAX_LEN + 1] = { 'H', 'e', 'l', 'l', 'o', ' ', 
-    'W', 'o', 'r', 'l', 'd'};
+// hello1_value is the first characteristic of hello service, initialized with "Hello World"
+// hello2_value is the second characteristic of hello service, initialized with "Lab 1 Group9"
+// temp_value is the characteristic of sensor service, initialized with 42 as an example sensor value
+static uint8_t hello1_value[] = "Hello World";
+static uint8_t hello2_value[] = "Lab 1 Group9";
+static uint8_t temp_value = 42;
 
-static uint8_t hello2_value[VND_MAX_LEN + 1] = { 'Z', 'e', 'p', 'h', 'y', 'r', ' ', 
-    'R', 'T', 'O', 'S'};
-
-static uint8_t sensor_value[1] = {42}; // Example sensor value
-// Custom Characteristic UUID
+// UUID for hello1 characteristic
+// UUID for hello2 characteristic
+// UUID for sensor characteristic
 static struct bt_uuid_128 hello1_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1));
-
 static struct bt_uuid_128 hello2_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef2));
-
 static struct bt_uuid_128 sensor_uuid = BT_UUID_INIT_128( 
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef4));
 
@@ -55,13 +54,13 @@ static const struct bt_data ad[] = {
 };
 
 // Callback function for reading the custom characteristic value
-static ssize_t read_vnd(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+// The value of the characteristic is stored in the user_data field of the attribute
+// bt_gatt_attr_read = helper function to read the characteristic value and return it in the buffer
+// provided by the caller
+static ssize_t read_hello(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			void *buf, uint16_t len, uint16_t offset)
 {
-	// The value of the characteristic is stored in the user_data field of the attribute
     const char *value = attr->user_data;
-    // Helper function to read the characteristic value and return it in the buffer
-    // provided by the caller
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, value,
 				 strlen(value));
 }
@@ -71,26 +70,27 @@ static ssize_t read_sensor(struct bt_conn *conn, const struct bt_gatt_attr *attr
 {
     const uint8_t *value = attr->user_data;
     return bt_gatt_attr_read(conn, attr, buf, len, offset, value,
-                 sizeof(sensor_value));
+                 sizeof(temp_value));
 }
 
-// Vendor Primary Service Declaration
+// Hello Service Declaration
+// Characteristic belongs to the primary service, has read property and permission, 
+// and uses read_hello as the read callback function
 BT_GATT_SERVICE_DEFINE(hello_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_HELLO_PRIMARY_VAL)),
-    // Characteristic belongs to the primary service, has read property and permission, 
-    // and uses read_vnd as the read callback function
     BT_GATT_CHARACTERISTIC(&hello1_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ, 
-        read_vnd, NULL, hello1_value),
+        read_hello, NULL, hello1_value),
     BT_GATT_CHARACTERISTIC(&hello2_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ,
-        read_vnd, NULL, hello2_value),
+        read_hello, NULL, hello2_value),
 );
 
+// Sensor Service Declaration
+// Characteristic belongs to the primary service, has read property and permission, 
+// and uses read_sensor as the read callback function
 BT_GATT_SERVICE_DEFINE(sensor_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_SENSOR_PRIMARY_VAL)),
-    // Characteristic belongs to the primary service, has read property and permission, 
-    // and uses read_vnd as the read callback function
     BT_GATT_CHARACTERISTIC(&sensor_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ,
-        read_sensor, NULL, sensor_value),
+        read_sensor, NULL, &temp_value),
 );
 
 // Callback function for connection events
