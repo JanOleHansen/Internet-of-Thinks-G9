@@ -24,40 +24,40 @@ wireless SetRangeWirelessFunction 11                    # no signal exceeding ra
 
 # Create socket terminals to access the UART of each device through TCP
 emulation CreateServerSocketTerminal 60001 "term_1"               # access output with e.g. `telnet localhost 60001`, exit telnet with Ctrl+], then type quit
-#emulation CreateServerSocketTerminal 60002 "term_2"              # access output with e.g. `telnet localhost 60002`
-#emulation CreateServerSocketTerminal 60003 "term_3"              # access output with e.g. `telnet localhost 60003`
-#emulation CreateServerSocketTerminal 60004 "term_4"              # access output with e.g. `telnet localhost 60004`
+emulation CreateServerSocketTerminal 60002 "term_2"              # access output with e.g. `telnet localhost 60002`
+emulation CreateServerSocketTerminal 60003 "term_3"              # access output with e.g. `telnet localhost 60003`
+emulation CreateServerSocketTerminal 60004 "term_4"              # access output with e.g. `telnet localhost 60004`
 
 
 # Create up to four machines named "device_1" till "device_4" based on the our modified nRF52840 platform (with random BLE address).
 # Connect the machine to our wireless medium, set its position, and connect its UART to the TCP socket.
-mach create "Starter"
+mach create "device_1"
 machine LoadPlatformDescription $board
 connector Connect radio wireless
 wireless SetPosition radio 0 0 0
 connector Connect uart0 term_1
 showAnalyzer uart0                                    # optionally show the UART output also as a seperate window
 
-#mach create "device_2"
-#machine LoadPlatformDescription $board
-#connector Connect radio wireless
-#wireless SetPosition radio 0 10 0
-#connector Connect uart0 term_2
-# showAnalyzer uart0
+mach create "device_2"
+machine LoadPlatformDescription $board
+connector Connect radio wireless
+wireless SetPosition radio 0 10 0
+connector Connect uart0 term_2
+showAnalyzer uart0
 
-#mach create "device_3"
-#machine LoadPlatformDescription $board
-#connector Connect radio wireless
-#wireless SetPosition radio 0 20 0
-#connector Connect uart0 term_3
-# showAnalyzer uart0
+mach create "device_3"
+machine LoadPlatformDescription $board
+connector Connect radio wireless
+wireless SetPosition radio 0 20 0
+connector Connect uart0 term_3
+showAnalyzer uart0
 
-#mach create "device_4"
-#machine LoadPlatformDescription $board
-#connector Connect radio wireless
-#wireless SetPosition radio 0 30 0
-#connector Connect uart0 term_4
-# showAnalyzer uart0
+mach create "device_4"
+machine LoadPlatformDescription $board
+connector Connect radio wireless
+wireless SetPosition radio 0 30 0
+connector Connect uart0 term_4
+showAnalyzer uart0
 
 
 # Create four machines named "interferer_1" till "interferer_4" based on the our modified nRF52840 platform (with random BLE address).
@@ -98,17 +98,17 @@ emulation LogBLETraffic
 # The following series of commands is executed everytime the machine is reset.
 macro reset
 """
-    mach set "Starter"
+    mach set "device_1"
     sysbus LoadELF $firmware_bin
 
-    #mach set "device_2"
-    #sysbus LoadELF $firmware_bin
+    mach set "device_2"
+    sysbus LoadELF $firmware_bin
 
-    #mach set "device_3"
-    #sysbus LoadELF $firmware_bin
+    mach set "device_3"
+    sysbus LoadELF $firmware_bin
 
-    #mach set "device_4"
-    #sysbus LoadELF $firmware_bin
+    mach set "device_4"
+    sysbus LoadELF $firmware_bin
 
 #     mach set "interferer_1"                           # uncomment for second part of the evaluation
 #     sysbus LoadELF $firmware_interferer_bin
