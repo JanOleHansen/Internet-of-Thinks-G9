@@ -119,6 +119,7 @@ void sendAdvertisingData(uint8_t type, uint8_t seq, uint8_t ttl){
 			printk("Advertising failed to start (err %d)\n", err);
 			return;
 		}
+		printk("TX type=%u seq=%u ttl=%u\n", type, seq, ttl);
 		// Advertise for 0.5 seconds
 		k_msleep(SLEEP_TIME_MS);
 		/* Stop advertising */
@@ -157,6 +158,8 @@ bool parse_adv_data(struct bt_data *data, void *user_data) {
 				printk("Invalid message type\n");
 				return false;
 			}
+			printk("RX type=%u seq=%u ttl=%u\n",
+      			 message_type, received_seq, data->data[4]);
 			// Send the message to other devices if ttl is not expired
 			sendAdvertisingData(data->data[2], data->data[3], data->data[4]);
 		}
