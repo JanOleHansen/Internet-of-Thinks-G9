@@ -36,14 +36,17 @@ showAnalyzer uart0
 emulation SetGlobalQuantum "0.00001"
 # emulation LogBLETraffic								# uncomment this if you want to use Wireshark
 
+
 macro reset
 """
     mach set "broadcaster"
-    sysbus LoadELF $device1_bin
+    # Use the variable directly with the @ symbol inside the macro
+    sysbus LoadELF @$device1_bin
 	
     mach set "observer"
-    sysbus LoadELF $device2_bin
+    sysbus LoadELF @$device2_bin
 """
+
 runMacro $reset
 
 echo "Script loaded. Now start with the 'start' command."
