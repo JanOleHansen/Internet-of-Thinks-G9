@@ -9,6 +9,7 @@ using sysbus
 # Lines below declare binary file for Zephyr BLE devices.
 # Binaries used here are defaults and can be replaced by changing variables below before running this script.
 $firmware_bin?=@/home/t14/Documents/Uni/Semester6/IoT/Lab2/Node1/.pio/build/nrf52840_dk/firmware.elf
+$firmware_sink_bin?=@/home/t14/Documents/Uni/Semester6/IoT/Lab2/NodeSink/.pio/build/nrf52840_dk/firmware.elf
 # $firmware_interferer_bin=@firmware_interferer.elf     # update path here!
 
 
@@ -99,7 +100,7 @@ emulation LogBLETraffic
 macro reset
 """
     mach set "device_1"
-    sysbus LoadELF $firmware_bin
+    sysbus LoadELF $firmware_sink_bin   # auto-SINK: forms network on start (Part 4)
 
     mach set "device_2"
     sysbus LoadELF $firmware_bin
