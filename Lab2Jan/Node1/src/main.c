@@ -366,10 +366,9 @@ static void print_measurement(const struct meas_msg *m, uint32_t rx_time_ms)
                        ? (rx_time_ms - m->ts_ms)
                        : 0U;
 
-    printk("[MEAS] node=%u #%u | temp=",
-           (unsigned)m->node_id, (unsigned)m->counter);
+    printk("%u;%u;", (unsigned)m->node_id, (unsigned)m->counter);
     print_temp(m->temp_10);
-    printk("°C  hum=%u.%u%%  | ts=%ums  tx=%ums\n",
+    printk(";%u.%u;%u;%u\n",
            (unsigned)(m->hum_10 / 10u),
            (unsigned)(m->hum_10 % 10u),
            (unsigned)m->ts_ms,
