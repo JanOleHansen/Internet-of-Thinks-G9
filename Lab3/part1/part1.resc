@@ -1,0 +1,46 @@
+:name: Two Zephyr 802.15.4 UDP nodes
+
+using sysbus
+
+$sender_bin?=$ORIGIN/sender/.pio/build/nrf52840_dk/firmware.elf
+$receiver_bin?=$ORIGIN/receiver/.pio/build/nrf52840_dk/firmware.elf
+
+# IEEE 802.15.4 wireless medium
+emulation CreateIEEE802_15_4Medium "wireless"
+
+# Create socket terminals to access the UART of each device through TCP
+emulation CreateServerSocketTerminal 60001 "term1"               # access output with e.g. `telnet localhost 60001`, exit telnet with Ctrl+], then type quit
+emulation CreateServerSocketTerminal 60002 "term2"              # access output with e.g. `telnet localhost 60002`
+
+# Sender node
+mach create "sender"
+machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
+connector Connect sysbus.radio wireless
+connector Connect uart0 term1
+logLevel -1 sysbus.radio
+showAnalyzer uart0
+
+# Receiver node
+mach create "receiver"
+machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
+connector Connect sysbus.radio wireless
+connector Connect uart0 term2
+logLevel -1 sysbus.radio
+showAnalyzer uart0
+
+# Helps synchronize both simulated CPUs
+emulation SetGlobalQuantum "0.00001"
+
+macro reset
+"""
+    mach set "sender"
+    sysbus LoadELF $sender_bin
+
+    mach set "receiver"
+    sysbus LoadELF $receiver_bin
+"""
+
+runMacro $reset
+
+echo "Script loaded. Now start with the 'start' command."
+echo ""

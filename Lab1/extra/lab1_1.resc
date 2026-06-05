@@ -1,0 +1,50 @@
+:name: IoT Lab 1
+:description: Simulation script for IoT lab 1
+
+using sysbus
+$device1_bin?=$ORIGIN/broadcaster/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
+$device2_bin?=$ORIGIN/observer/.pio/build/nrf52840_dk/firmware.elf		# update the path according to your setup
+
+emulation CreateBLEMedium "wireless"
+wireless SetRangeLossWirelessFunction 10 1.0 0.6		# uncomment this line to introduce probabilistic packet loss for Part 3
+
+emulation CreateServerSocketTerminal 60001 "term1" false
+emulation CreateServerSocketTerminal 60002 "term2" false
+
+# Create device1
+
+mach create "broadcaster"
+machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
+connector Connect sysbus.radio wireless
+wireless SetPosition radio 0 0 0						# change position here for Part 3, the last three values are <x> <y> <z> coordinates
+connector Connect uart0 term1
+
+logLevel -1 sysbus.radio
+showAnalyzer uart0
+
+# Create device2
+
+mach create "observer"
+machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
+connector Connect sysbus.radio wireless
+wireless SetPosition radio 0 10 0						# change position here for Part 3, the last three values are <x> <y> <z> coordinates
+connector Connect uart0 term2
+
+logLevel -1 sysbus.radio
+showAnalyzer uart0 
+
+emulation SetGlobalQuantum "0.00001"
+# emulation LogBLETraffic								# uncomment this if you want to use Wireshark
+
+macro reset
+"""
+    mach set "broadcaster"
+    sysbus LoadELF $device1_bin
+	
+    mach set "observer"
+    sysbus LoadELF $device2_bin
+"""
+runMacro $reset
+
+echo "Script loaded. Now start with the 'start' command."
+echo ""
