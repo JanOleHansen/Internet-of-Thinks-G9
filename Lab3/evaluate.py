@@ -4,9 +4,9 @@ import re
 import threading
 import time
 import statistics
-from collections import defaultdict
 
 import serial
+import matplotlib.pyplot as plt
 
 REQ_RE = re.compile(r"REQ MID=(\d+)")
 ACK_RE = re.compile(r"ACK MID=(\d+)")
@@ -60,14 +60,70 @@ def read_serial(name, port, baud):
                     })
 
 
+def save_latency_plot(rows, label):
+    rtt_points = [
+        (row["mid"], row["rtt_ms"])
+        for row in rows
+        if row["rtt_ms"] != ""
+    ]
+
+    if not rtt_points:
+        print("No RTT values available for plotting.")
+        return
+
+    mids = [p[0] for p in rtt_points]
+    rtts = [p[1] for p in rtt_points]
+
+    plt.figure()
+    plt.plot(mids, rtts, marker="o")
+    plt.xlabel("Message ID")
+    plt.ylabel("RTT [ms]")
+    plt.title(f"CoAP RTT over time - {label}")
+    plt.grid(True)
+    plt.tight_layout()
+    filename = f"coap_rtt_{label}.png"
+    plt.savefig(filename)
+    print(f"Saved plot: {filename}")
+
+
+def save_loss_plot(sent, received_by_server, acked_by_client, label):
+    if sent == 0:
+        print("No requests available for loss plot.")
+        return
+
+    values = [
+        100 * received_by_server / sent,
+        100 * acked_by_client / sent,
+    ]
+
+    labels = [
+        "Server received",
+        "Client received ACK",
+    ]
+
+    plt.figure()
+    plt.bar(labels, values)
+    plt.ylabel("Success rate [%]")
+    plt.ylim(0, 105)
+    plt.title(f"CoAP reliability - {label}")
+    plt.grid(True, axis="y")
+    plt.tight_layout()
+    filename = f"coap_reliability_{label}.png"
+    plt.savefig(filename)
+    print(f"Saved plot: {filename}")
+
+
 def analyse(label):
     reqs = {}
     acks = {}
     server_rx = {}
     server_resp = {}
-    rtts = []
+    rtts_by_mid = {}
 
-    for e in events:
+    with lock:
+        collected_events = list(events)
+
+    for e in collected_events:
         mid = e["mid"]
 
         if e["event"] == "REQ":
@@ -79,7 +135,7 @@ def analyse(label):
         elif e["event"] == "RESP":
             server_resp[mid] = e
         elif e["event"] == "RTT":
-            rtts.append(e["rtt_ms"])
+            rtts_by_mid[mid] = e["rtt_ms"]
 
     rows = []
 
@@ -94,7 +150,7 @@ def analyse(label):
             "server_received": 1 if rx else 0,
             "server_response_sent": 1 if resp else 0,
             "client_ack_received": 1 if ack else 0,
-            "rtt_ms": next((e["rtt_ms"] for e in events if e["event"] == "RTT" and e["mid"] == mid), ""),
+            "rtt_ms": rtts_by_mid.get(mid, ""),
         })
 
     csv_name = f"coap_eval_{label}.csv"
@@ -114,6 +170,7 @@ def analyse(label):
     sent = len(reqs)
     received_by_server = len(server_rx)
     acked_by_client = len(acks)
+    rtts = [r for r in rtts_by_mid.values() if r is not None]
 
     print("\n========== RESULTS ==========")
     print(f"Requests sent by client: {sent}")
@@ -134,6 +191,9 @@ def analyse(label):
         print(f"Median RTT: {statistics.median(rtts):.2f} ms")
 
     print(f"\nSaved CSV: {csv_name}")
+
+    save_latency_plot(rows, label)
+    save_loss_plot(sent, received_by_server, acked_by_client, label)
 
 
 def main():
