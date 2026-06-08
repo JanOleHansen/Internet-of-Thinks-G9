@@ -196,16 +196,6 @@ void main(void)
         return;
     }
 
-	// Set timeout for receiving responses
-	struct timeval timeout = {
-		.tv_sec = 2,
-		.tv_usec = 0,
-	};
-	ret = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
-			&timeout, sizeof(timeout));
-	if (ret < 0) {
-		printk("setsockopt() failed: %d\n", errno);
-	}
 	// Define Server address
 	struct sockaddr_in6 server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
@@ -244,8 +234,10 @@ void main(void)
 		}
 		// Send CoAP request to server
 		printk("Sending CoAP request to server...\n");
+        printk("REQ MID=%u\n", msg_id);
+        int64_t start_time = k_uptime_get();
 		ret = sendto(sock,
-             send_buf,
+             request.data,
              request.offset,
              0,
              (struct sockaddr *)&server_addr,
@@ -255,13 +247,14 @@ void main(void)
 			k_sleep(K_SECONDS(5));
 			continue;
 		}
+        printk("sendto successful, bytes=%d\n", ret);
 		// Wait for CoAP response from server
 		uint8_t recv_buf[RECV_BUF_SIZE];
 		printk("Waiting for CoAP response...\n");
 		struct sockaddr_in6 server_response_addr;
 		socklen_t server_len = sizeof(server_response_addr);
         struct coap_packet response;
-		ret = recvfrom(sock,
+		/*ret = recvfrom(sock,
                        recv_buf,
                        sizeof(recv_buf),
                        0,
@@ -272,7 +265,41 @@ void main(void)
             printk("recvfrom() failed: %d\n", errno);
 			k_sleep(K_SECONDS(5));
             continue;
+        }*/
+       struct pollfd fds[1];
+
+        fds[0].fd = sock;
+        fds[0].events = POLLIN;
+        fds[0].revents = 0;
+
+        ret = poll(fds, 1, 2000); // 2000 ms timeout
+
+        if (ret < 0) {
+            printk("poll failed: %d\n", errno);
+            k_sleep(K_SECONDS(5));
+            continue;
         }
+
+        if (ret == 0) {
+            printk("CoAP response timeout\n");
+            k_sleep(K_SECONDS(5));
+            continue;
+        }
+
+        if (fds[0].revents & POLLIN) {
+            ret = recvfrom(sock,
+                        recv_buf,
+                        sizeof(recv_buf),
+                        0,
+                        (struct sockaddr *)&server_response_addr,
+                        &server_len);
+
+            if (ret < 0) {
+                printk("recvfrom() failed: %d\n", errno);
+                k_sleep(K_SECONDS(5));
+                continue;
+            }
+        }   
 
         printk("Received %d bytes\n", ret);
 
@@ -288,9 +315,12 @@ void main(void)
 		uint8_t rx_token_len;
 		const uint8_t *rx_token = coap_header_get_token(&response, &rx_token_len);
         // Check if response matches the request
-        if (conn_type == COAP_TYPE_ACK && id == msg_id && rx_token_len == sizeof(token) &&
-    	memcmp(rx_token, token, sizeof(token)) == 0) {
+        if (conn_type == COAP_TYPE_ACK && id == msg_id){ //&& rx_token_len == sizeof(token) &&
+    	//memcmp(rx_token, token, sizeof(token)) == 0) {
+            int64_t end_time = k_uptime_get();
             printk("Received ACK for message ID: %d\n", id);
+            printk("ACK MID=%u\n", id);
+            printk("RTT=%lld ms MID=%u\n", end_time - start_time, msg_id);
 			uint16_t payload_len;
 			// Extract payload from response
 			uint8_t *payload = coap_packet_get_payload(&response, &payload_len);

@@ -124,8 +124,8 @@ static int send_response(int sock,
                            sizeof(response_buf),
                            COAP_VERSION_1,
                            conn_type,
-                           token_len,
-                           token,
+                           0,
+                           NULL,
                            response_code,
                            id);
     if (ret < 0) {
@@ -229,7 +229,7 @@ void main(void)
             printk("Invalid CoAP packet: %d\n", ret);
             continue;
         }
-
+        printk("RX MID=%u\n", coap_header_get_id(&request));
         uint8_t method = coap_header_get_code(&request);
         uint8_t conn_type = coap_header_get_type(&request);
         // Determine response based on method and path
@@ -277,5 +277,6 @@ void main(void)
                           COAP_RESPONSE_CODE_NOT_FOUND,
                           "not found");
         }
+        printk("RESP MID=%u\n", coap_header_get_id(&request));
     }
 }

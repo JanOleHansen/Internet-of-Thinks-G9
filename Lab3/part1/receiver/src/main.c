@@ -89,7 +89,6 @@ void main(void)
             printk("recv() failed: %d\n", errno);
             continue;
         }
-        buffer[ret] = '\0'; // Null-terminate the received data
-        printk("Received: %s\n from %s", buffer, net_addr_ntop(AF_INET6, &src_addr.sin6_addr, buffer, sizeof(buffer)));
+        printk("Received: %s\n", buffer);
     }
 }
