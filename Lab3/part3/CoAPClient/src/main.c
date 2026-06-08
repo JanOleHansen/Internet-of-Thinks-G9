@@ -91,8 +91,8 @@ static int setup_network(void)
 // Callback handler Function for button interrupt
 void button_cb(const struct device *port, struct gpio_callback *cb, gpio_port_pins_t pins){
 	if (pins & BIT(BUTTON_PIN)){
-		printk("Button was pressed, action_state set to true!\n");
-		action_state = true;
+		printk("Button was pressed, action_state will be toggled!\n");
+		action_state = !action_state;
 	}
 	return;
 }
@@ -266,6 +266,7 @@ void main(void)
 			k_sleep(K_SECONDS(5));
             continue;
         }*/
+       // Try with polling, because setsockopt with timeout does not seem to work on nrf52840dk
        struct pollfd fds[1];
 
         fds[0].fd = sock;
@@ -316,7 +317,8 @@ void main(void)
 		const uint8_t *rx_token = coap_header_get_token(&response, &rx_token_len);
         // Check if response matches the request
         if (conn_type == COAP_TYPE_ACK && id == msg_id){ //&& rx_token_len == sizeof(token) &&
-    	//memcmp(rx_token, token, sizeof(token)) == 0) {
+    	//memcmp(rx_token, token, sizeof(token)) == 0) { => token parsing does not seem to work on nrf52840dk, 
+        // so we just check message ID for matching
             int64_t end_time = k_uptime_get();
             printk("Received ACK for message ID: %d\n", id);
             printk("ACK MID=%u\n", id);

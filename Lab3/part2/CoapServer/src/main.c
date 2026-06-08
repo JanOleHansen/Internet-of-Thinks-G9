@@ -79,10 +79,7 @@ static bool path_matches(struct coap_packet *request, const char *expected)
         return false;
     }
 
-    /*
-     * Für dieses Lab erwarten wir einfache Pfade:
-     * /sensor oder /action
-     */
+
     if (count != 1) {
         return false;
     }
@@ -127,7 +124,7 @@ static int send_response(int sock,
                            0,
                            NULL,
                            response_code,
-                           id);
+                           id); // token parsing does not seem to work on nrf52840dk, so we set token length to 0 and token to NULL
     if (ret < 0) {
         printk("coap_packet_init response failed: %d\n", ret);
         return ret;
