@@ -1,10 +1,58 @@
-Ablauf:
+Sequence:
 	1. Nodes send Advertising Data
 	2. Pi Hub sends connection request
-	3. Nodes antworten mir connection response
+	3. Nodes awnser with connection response
+		Nodes are connected
 	
 	
-	Environment Nodes send data to Hub
+	Environment Nodes send environment data to Hub
 	Hub calculates appropiate actions
 	Hub sends Actions to Actuator Node
+	Actuator Node 
 	
+	
+Data struct:
+
+uint8_t node_id
+uint8_t msg_type
+uint16_t sequence_number
+uint16_t payload[16]
+
+
+Node Ids
+	ENV_NODE = 1
+	WIN_NODE = 2
+	ACT_NODE = 3
+
+MSG_TYPES
+	SENSOR_DATA = 1
+	COMMAND = 2
+	ACK = 3
+	HEARTBEAT = 4
+	ERROR = 5
+
+Advertisin Data:
+		Name: ACT_NODE
+		Flags: LE GENERAL DISCOVERABLE
+
+
+Payload:
+SENSOR_DATA
+	SENSOR_TYPE
+	TEMP_SENSOR = 1
+	HUM_SENSOR = 2
+	LIGHT_SENSOR = 3
+	MOTION_SENSOR = 4
+	WINDOW_SENSOR = 5
+
+		uint8_t SENSOR_TYPE
+		uint16_t SENSOR DATA
+		
+COMMAND
+COMMANDS
+	LIGHT_ON 1
+	LIGHT_OFF 2
+	HEATING_ON 3
+	HEATING_OF 4
+		
+
