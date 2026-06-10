@@ -1,0 +1,10 @@
+Ablauf:
+	1. Nodes send Advertising Data
+	2. Pi Hub sends connection request
+	3. Nodes antworten mir connection response
+	
+	
+	Environment Nodes send data to Hub
+	Hub calculates appropiate actions
+	Hub sends Actions to Actuator Node
+	
