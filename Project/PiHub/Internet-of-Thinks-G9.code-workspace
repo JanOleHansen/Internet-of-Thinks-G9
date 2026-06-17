@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"name": "ActuatorNode",
+			"path": "../ActuatorNode"
+		}
+	],
+	"settings": {}
+}
