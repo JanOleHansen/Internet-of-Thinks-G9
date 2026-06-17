@@ -30,36 +30,49 @@ struct dht11_data {
     uint8_t checksum;
 };
 
-static int wait_for_level(int level, int timeout_us)
+static int wait_until_level(int level, uint32_t timeout_us)
 {
-    int waited = 0;
+    uint32_t start = k_cycle_get_32();
+    uint32_t timeout_cycles = k_us_to_cyc_ceil32(timeout_us);
 
     while (gpio_pin_get(gpio1, DHT_PIN) != level) {
-        if (waited >= timeout_us) {
+        if ((uint32_t)(k_cycle_get_32() - start) > timeout_cycles) {
             return -ETIMEDOUT;
         }
-
-        k_busy_wait(1);
-        waited++;
     }
 
-    return waited;
+    return 0;
 }
 
+static int measure_level_duration_us(int level, uint32_t timeout_us)
+{
+    uint32_t start = k_cycle_get_32();
+    uint32_t timeout_cycles = k_us_to_cyc_ceil32(timeout_us);
+
+    while (gpio_pin_get(gpio1, DHT_PIN) == level) {
+        if ((uint32_t)(k_cycle_get_32() - start) > timeout_cycles) {
+            return -ETIMEDOUT;
+        }
+    }
+
+    uint32_t elapsed_cycles = k_cycle_get_32() - start;
+    return (int)k_cyc_to_us_floor32(elapsed_cycles);
+}
 int dht11_read(struct dht11_data *out)
 {
     uint8_t data[5] = {0};
     int ret;
 
-    //1) Bus freigeben/Idle HIGH sicherstellen
+    if (!device_is_ready(gpio1)) {
+        return -ENODEV;
+    }
+
     ret = gpio_pin_configure(gpio1, DHT_PIN, GPIO_INPUT | GPIO_PULL_UP);
     if (ret < 0) {
         return ret;
     }
 
     k_msleep(2);
-
-    // 2) Startsignal: MCU zieht DATA mindestens 18 ms LOW.
 
     ret = gpio_pin_configure(gpio1, DHT_PIN, GPIO_OUTPUT_LOW);
     if (ret < 0) {
@@ -68,9 +81,6 @@ int dht11_read(struct dht11_data *out)
 
     k_msleep(20);
 
-    // 3) Leitung freigeben: Nicht HIGH treiben, sondern auf Input schalten. 
-    // Danach wartet die MCU laut Datenblatt 20-40 us.
-     
     ret = gpio_pin_configure(gpio1, DHT_PIN, GPIO_INPUT | GPIO_PULL_UP);
     if (ret < 0) {
         return ret;
@@ -78,52 +88,46 @@ int dht11_read(struct dht11_data *out)
 
     k_busy_wait(30);
 
-    // 4) DHT11 Antwort: ca. 80 us LOW, danach ca. 80 us HIGH.
-    ret = wait_for_level(0, 500);
+    ret = wait_until_level(0, 200);
     if (ret < 0) {
-        printk("DHT error: no initial 80us LOW response\n");
         return -EIO;
     }
 
-    ret = wait_for_level(1, 500);
+    ret = measure_level_duration_us(0, 120);
     if (ret < 0) {
-        printk("DHT error: no 80us HIGH response\n");
         return -EIO;
     }
 
-    ret = wait_for_level(0, 500);
+    ret = measure_level_duration_us(1, 120);
     if (ret < 0) {
-        printk("DHT error: no LOW before data bits\n");
         return -EIO;
     }
 
-    // 5) 40 Datenbits:
-    // jedes Bit beginnt mit ca. 50 us LOW,
-    // danach HIGH:
-    // ca. 26-28 us = 0#
-    // ca. 70 us    = 1
     for (int i = 0; i < 40; i++) {
-        ret = wait_for_level(1, 500);
+        ret = wait_until_level(0, 100);
         if (ret < 0) {
-            printk("DHT error: bit %d did not go HIGH\n", i);
             return -EIO;
         }
 
-        int high_time = wait_for_level(0, 500);
-        if (high_time < 0) {
-            printk("DHT error: bit %d HIGH timeout\n", i);
+        ret = measure_level_duration_us(0, 100);
+        if (ret < 0) {
             return -EIO;
         }
+
+        ret = measure_level_duration_us(1, 120);
+        if (ret < 0) {
+            return -EIO;
+        }
+
+        int high_us = ret;
 
         data[i / 8] <<= 1;
 
-        if (high_time > 40) {
+        if (high_us > 50) {
             data[i / 8] |= 1;
         }
     }
 
-    // 6) Checksumme: letzte 8 Bit der Summe von Byte 0-3.
-     
     uint8_t checksum = (uint8_t)(data[0] + data[1] + data[2] + data[3]);
 
     if (checksum != data[4]) {
@@ -132,14 +136,15 @@ int dht11_read(struct dht11_data *out)
                data[0], data[1], data[2], data[3], data[4]);
         return -EBADMSG;
     }
-    printk("Raw: %u %u %u %u %u\n",
-               data[0], data[1], data[2], data[3], data[4]);
 
     out->humidity_int = data[0];
     out->humidity_dec = data[1];
     out->temp_int = data[2];
     out->temp_dec = data[3];
     out->checksum = data[4];
+
+    printk("Raw: %u %u %u %u %u\n",
+           data[0], data[1], data[2], data[3], data[4]);
 
     return 0;
 }
