@@ -13,10 +13,7 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 #include <bluetooth/services/bas.h>
-//#include <bluetooth/services/cts.h>
 #include <bluetooth/services/hrs.h>
-//#include <bluetooth/services/ias.h>
-#include <bluetooth/gatt.h>
 
 #define ENV_NODE 1
 // Here are the MSG_TYPES
@@ -56,7 +53,9 @@ Advertisin Data:
 
 static const struct device *gpio1 = DEVICE_DT_GET(DT_NODELABEL(gpio1));
 
-static bool connected = false;
+static bool central_connected = false;
+static bool sensor_notify_enabled;
+struct bt_conn *conn_hub;
 
 static struct mfg_data {
     uint8_t name_id;
@@ -82,6 +81,16 @@ struct bt_gatt_data  {
     uint16_t sequence_number;
     uint16_t payload[3];
 };
+
+static void sensor_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                   uint16_t value)
+{
+    sensor_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+
+    printk("Sensor notifications %s\n",
+           sensor_notify_enabled ? "enabled" : "disabled");
+}
+
 // UUID for Sensor Service (primary)
 #define BT_UUID_SENSOR_PRIMARY_VAL \
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
@@ -92,10 +101,23 @@ static struct bt_uuid_128 sensor_uuid = BT_UUID_INIT_128(BT_UUID_SENSOR_CHAR);
 // Sensor Service Declarationn
 BT_GATT_SERVICE_DEFINE(sensor_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_SENSOR_PRIMARY_VAL)),
-    BT_GATT_CHARACTERISTIC(&sensor_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ,
+    BT_GATT_CHARACTERISTIC(&sensor_uuid.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE,
         NULL, NULL, NULL),
+    BT_GATT_CCC(sensor_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 );
 
+static int send_sensor_packet(struct bt_gatt_data *pkt)
+{
+    if (!conn_hub || !sensor_notify_enabled) {
+        printk("No connection or notifications disabled\n");
+        return -ENOTCONN;
+    }
+
+    return bt_gatt_notify(conn_hub,
+                          &sensor_svc.attrs[2],
+                          pkt,
+                          sizeof(*pkt));
+}
 // Callback function for connection events
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -103,7 +125,9 @@ static void connected(struct bt_conn *conn, uint8_t err)
         printk("Connection failed (err %u)\n", err);
         return;
     }
+    central_connected = true;
     printk("Central connected\n");
+    conn_hub = bt_conn_ref(conn);
     err = bt_le_adv_stop();
     if (err != 0){
         printk("Stopping Advertising failed!\n");
@@ -116,6 +140,12 @@ static void connected(struct bt_conn *conn, uint8_t err)
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
     printk("Central disconnected (reason %u)\n", reason);
+    if (conn_hub) {
+        bt_conn_unref(conn_hub);
+        conn_hub = NULL;
+    }
+    central_connected = false;
+    sensor_notify_enabled = false;
 }
 
 // Define connection callbacks
@@ -252,16 +282,15 @@ int dht11_read(struct dht11_data *out)
 
     return 0;
 }
-struct bt_gatt_data* createDataPacket(uint16_t sensor_type, uint16_t val1, uint16_t val2){
-    uint16_t payload[3] = {sensor_type, val1, val2};
-    struct bt_gatt_data packet = {
-        .node_id = ENV_NODE,
-        .msg_type = SENSOR_DATA,
-        .sequence_number = seq_num,
-        .payload = payload,
-    };
+static void createDataPacket(struct bt_gatt_data* packet, uint16_t sensor_type, uint16_t val1, uint16_t val2)
+{
+    packet->node_id = ENV_NODE;
+    packet->msg_type = SENSOR_DATA;
+    packet->sequence_number = seq_num;
+    packet->payload[0] = sensor_type;
+    packet->payload[1] = val1;
+    packet->payload[2] = val2;
     seq_num++;
-    return &packet;
 }
 void main(void)
 {
@@ -283,7 +312,7 @@ void main(void)
         return;
     }
 
-    int err = gpio_pin_configure(gpio1, LIGHT_PIN, GPIO_INPUT);
+    err = gpio_pin_configure(gpio1, LIGHT_PIN, GPIO_INPUT);
     if (err != 0){
         printk("Configuration of Light-Pin failed\n");
         return;
@@ -296,12 +325,11 @@ void main(void)
     }
 
     // Send Advertising Data to give Central opportunity to connect with EnvironmentNode
-    while (!connected){
+    while (!central_connected){
         k_sleep(K_MSEC(200));
     }
 
     while (1) {
-
         // Read DHT11
         int ret = dht11_read(&dht);
         if (ret == 0) {
@@ -314,10 +342,19 @@ void main(void)
             printk("DHT11 read failed: %d\n", ret);
         }
         // Save DHT11 Data in two packets
-        struct bt_gatt_data *temp_packet = createDataPacket(TEMP_SENSOR, dht.temp_int, dht.temp_dec);
-        struct bt_gatt_data *hum_packet = createDataPacket(HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
+        struct bt_gatt_data *temp_packet;
+        createDataPacket(temp_packet, TEMP_SENSOR, dht.temp_int, dht.temp_dec);
+        struct bt_gatt_data *hum_packet;
+        createDataPacket(hum_packet, HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
         // TODO: Send packets via Notification
-
+        err = send_sensor_packet(temp_packet);
+        if (err != 0){
+            printk("Sending Temperaturepacket failed\n");
+        }
+        err = send_sensor_packet(hum_packet);
+        if (err != 0){
+            printk("Sending Humiditypacket failed\n");
+        }
         // Read Light Sensor
         int value = gpio_pin_get(gpio1, LIGHT_PIN);
         if (value == 0){
@@ -326,9 +363,13 @@ void main(void)
             printk("Es ist dunkel\n");
         }
         // Save Light Data in packet
-        struct bt_gatt_data *light_packet = createDataPacket(LIGHT_SENSOR, value, NULL);
+        struct bt_gatt_data *light_packet;
+        createDataPacket(light_packet, LIGHT_SENSOR, value, 0);
         // TODO: Send packet via Notification
-
+        err = send_sensor_packet(light_packet);
+        if (err != 0){
+            printk("Sending Lightpacket failed\n");
+        }
         // Read Movement Sensor
         int val = gpio_pin_get(gpio1, MOVEMENT_PIN);
         if (val == 1 && !action){
@@ -339,9 +380,13 @@ void main(void)
             printk("No Movement was detected\n");
         }
         // Save Movement Data in packet
-        struct bt_gatt_data *movement_packet = createDataPacket(MOTION_SENSOR, val, NULL);
+        struct bt_gatt_data *movement_packet;
+        createDataPacket(movement_packet, MOTION_SENSOR, val, 0);
         // TODO: Send packet via Notification
-        
+        err = send_sensor_packet(movement_packet);
+        if (err != 0){
+            printk("Sending Motionpacket failed\n");
+        }
         k_sleep(K_SECONDS(1));
     }
 }
