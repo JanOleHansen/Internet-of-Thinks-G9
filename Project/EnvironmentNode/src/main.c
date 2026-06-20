@@ -336,16 +336,16 @@ void main(void)
             printk("DHT11 read failed: %d\n", ret);
         }
         // Save DHT11 Data in two packets
-        struct bt_gatt_data *temp_packet;
-        createDataPacket(temp_packet, TEMP_SENSOR, dht.temp_int, dht.temp_dec);
-        struct bt_gatt_data *hum_packet;
-        createDataPacket(hum_packet, HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
+        struct bt_gatt_data temp_packet;
+        createDataPacket(&temp_packet, TEMP_SENSOR, dht.temp_int, dht.temp_dec);
+        struct bt_gatt_data hum_packet;
+        createDataPacket(&hum_packet, HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
         // TODO: Send packets via Notification
-        err = send_sensor_packet(temp_packet);
+        err = send_sensor_packet(&temp_packet);
         if (err != 0){
             printk("Sending Temperaturepacket failed\n");
         }
-        err = send_sensor_packet(hum_packet);
+        err = send_sensor_packet(&hum_packet);
         if (err != 0){
             printk("Sending Humiditypacket failed\n");
         }
@@ -357,10 +357,10 @@ void main(void)
             printk("Es ist dunkel\n");
         }
         // Save Light Data in packet
-        struct bt_gatt_data *light_packet;
-        createDataPacket(light_packet, LIGHT_SENSOR, value, 0);
+        struct bt_gatt_data light_packet;
+        createDataPacket(&light_packet, LIGHT_SENSOR, value, 0);
         // TODO: Send packet via Notification
-        err = send_sensor_packet(light_packet);
+        err = send_sensor_packet(&light_packet);
         if (err != 0){
             printk("Sending Lightpacket failed\n");
         }
@@ -374,10 +374,10 @@ void main(void)
             printk("No Movement was detected\n");
         }
         // Save Movement Data in packet
-        struct bt_gatt_data *movement_packet;
-        createDataPacket(movement_packet, MOTION_SENSOR, val, 0);
+        struct bt_gatt_data movement_packet;
+        createDataPacket(&movement_packet, MOTION_SENSOR, val, 0);
         // TODO: Send packet via Notification
-        err = send_sensor_packet(movement_packet);
+        err = send_sensor_packet(&movement_packet);
         if (err != 0){
             printk("Sending Motionpacket failed\n");
         }

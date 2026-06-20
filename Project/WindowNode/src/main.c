@@ -231,10 +231,10 @@ void main(void)
             printk("while-Loop yes");
             already_sent = true;
             // Save Window Data in packet
-            struct bt_gatt_data *window_packet;
-            createDataPacket(window_packet, MOTION_SENSOR, 1, 0);
+            struct bt_gatt_data window_packet;
+            createDataPacket(&window_packet, MOTION_SENSOR, 1, 0);
             // Send packet via Notification
-            err = send_sensor_packet(window_packet);
+            err = send_sensor_packet(&window_packet);
             if (err != 0){
                 printk("Sending Windowpacket failed\n");
             }
@@ -243,10 +243,10 @@ void main(void)
             printk("while-Loop no");
             already_sent = false;
             // Save Window Data in packet
-            struct bt_gatt_data *window_packet;
-            createDataPacket(window_packet, MOTION_SENSOR, 0, 0);
+            struct bt_gatt_data window_packet;
+            createDataPacket(&window_packet, MOTION_SENSOR, 0, 0);
             // Send packet via Notification
-            err = send_sensor_packet(window_packet);
+            err = send_sensor_packet(&window_packet);
             if (err != 0){
                 printk("Sending Windowpacket failed\n");
             }
