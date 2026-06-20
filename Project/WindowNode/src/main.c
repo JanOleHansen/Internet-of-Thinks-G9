@@ -53,15 +53,9 @@ static bool central_connected = false;
 static bool sensor_notify_enabled;
 struct bt_conn *conn_hub;
 
-static struct mfg_data {
-    uint8_t name_id;
-};
-static struct mfg_data my_mfg_data = {
-    .name_id = WIN_NODE
-};
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA(BT_DATA_MANUFACTURER_DATA, &my_mfg_data, sizeof(&my_mfg_data)),
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME)),
 };
 
 struct bt_gatt_data  {
