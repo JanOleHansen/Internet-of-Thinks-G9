@@ -1,10 +1,67 @@
-<h1>Smart Room Hub</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Hub</title>
 
-<div id="temperature"></div>
-<div id="humidity"></div>
-<div id="light"></div>
-<div id="motion"></div>
-<div id="window"></div>
-<div id="heating"></div>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="dashboard">
+
+    <h1>Smart Home Dashboard</h1>
+
+    <div class="grid">
+
+        <!-- Temperature -->
+        <div class="card temperature">
+            <img src="/static/icons/temperature.png">
+            <div class="label">Temperature</div>
+            <div id="temperature" class="value">-- °C</div>
+        </div>
+
+        <!-- Humidity -->
+        <div class="card humidity">
+            <img src="/static/icons/humidity.png">
+            <div class="label">Humidity</div>
+            <div id="humidity" class="value">-- %</div>
+        </div>
+
+        <!-- Light -->
+        <div class="card light">
+            <img src="/static/icons/light.png">
+            <div class="label">Light</div>
+            <div id="light" class="value">--</div>
+        </div>
+
+        <!-- Motion -->
+        <div class="card motion">
+            <img src="/static/icons/motion.png">
+            <div class="label">Motion</div>
+            <div id="motion" class="value">--</div>
+        </div>
+
+        <!-- Window -->
+        <div class="card window">
+            <img src="/static/icons/window.png">
+            <div class="label">Window</div>
+            <div id="window" class="value">--</div>
+        </div>
+
+        <!-- Heating -->
+        <div class="card heating">
+            <img src="/static/icons/heating.png">
+            <div class="label">Heating</div>
+            <div id="heating" class="value">OFF</div>
+        </div>
+
+    </div>
+
+</div>
 
 <script src="/static/app.js"></script>
+
+</body>
+</html>
