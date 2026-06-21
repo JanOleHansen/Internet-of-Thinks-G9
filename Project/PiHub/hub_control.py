@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
+from rule_engine import *
 from bleak import BleakClient, BleakScanner
+from datetime import *
 
 ACT_NODE_NAME = "ACT_NODE"
 COMMAND_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
@@ -30,6 +32,16 @@ WINDOW_SENSOR = 5
 
 BLINK_SECONDS = 5
 
+light_on = None
+# Time since light was on and the last motion in the room was detected
+light_on_time = None
+
+# Other global sensor data
+curr_temp = None
+curr_hum = None
+curr_window = None
+curr_motion = None
+
 
 def build_message(sequence_number: int, command: int) -> bytearray:
     message = bytearray()
@@ -58,32 +70,48 @@ def handle_env_notification(sender, data):
         print("Didn't received expected node_id")
         return
     if msg_type == MSG_TYPE_SENSOR:
+        global light_on
+        global light_on_time
         if sensor_type == TEMP_SENSOR:
-            temp = str(value1) + "." + str(value2) + " C"
+            global curr_temp
+            temp = str(value1) + "." + str(value2)
             print(
                 f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, temp={temp}"
+                f"seq={seq}, sensor={sensor_type}, temp={temp} C"
             )
+            curr_temp = float(temp)
         elif sensor_type == HUM_SENSOR:
-            humidity = str(value1) + "." + str(value2) + " %"
+            global curr_hum
+            humidity = str(value1) + "." + str(value2)
             print(
                 f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, humidity={humidity}"
+                f"seq={seq}, sensor={sensor_type}, humidity={humidity} %"
             )
+            curr_hum = float(humidity)
         elif sensor_type == LIGHT_SENSOR:
             if value1 == 0:
                 light = "on"
+                if not light_on: # Light was not on before, so start timer
+                    light_on = True 
+                    light_on_time = datetime.now(None) 
             else:
                 light = "off"
+                light_on = False 
             print(
                 f"ENV notification: node={node_id}, type={msg_type}, "
                 f"seq={seq}, sensor={sensor_type}, light={light}"
             )
         elif sensor_type == MOTION_SENSOR:
+            global curr_motion
+
             if value1 == 1:
                 motion = "yes"
+                if light_on: # Update time because there is still motion in the room
+                    light_on_time = datetime.now(None)
+                curr_motion = True
             else:
                 motion = "no"
+                curr_motion = False
             print(
                 f"ENV notification: node={node_id}, type={msg_type}, "
                 f"seq={seq}, sensor={sensor_type}, motion={motion}"
@@ -98,10 +126,13 @@ def handle_window_notification(sender, data):
         print("Didn't received expected node_id")
         return
     if msg_type == MSG_TYPE_SENSOR:
+        global curr_window
         if value1 == 1:
             window = "open"
+            curr_window = "open"
         else:
             window = "close"
+            curr_window = "close"
         print(
             f"WIN notification: node={node_id}, type={msg_type}, "
             f"seq={seq}, sensor={sensor_type}, window={window}"
@@ -138,8 +169,22 @@ async def maintain_node(name, notification_handler):
 
         await asyncio.sleep(3)
 
+async def evaluate_rules():
+    global curr_window, curr_hum, curr_motion, curr_temp, light_on, light_on_time
+    while True:
+        if all(v is not None for v in
+               (curr_window, curr_hum, curr_motion, curr_temp, light_on, light_on_time)):
+            print("Window CMD:", checkWindow(curr_window, curr_temp, curr_hum))
+            print("Heating CMD:", checkHeating(curr_temp, curr_window))
+            print("Light CMD:", checkLight(
+                light_on, curr_motion, light_on_time, datetime.now()
+            ))
+
+        await asyncio.sleep(1)
+
 async def main():
     # Actuator Node
+    '''
     print(f"Scanning for '{ACT_NODE_NAME}'...")
     device = await BleakScanner.find_device_by_name(ACT_NODE_NAME, timeout=10.0)
     if device is None:
@@ -161,7 +206,7 @@ async def main():
         print("Light OFF")
         await client.write_gatt_char(COMMAND_CHAR_UUID, build_message(2, COMMAND_HEATING_OFF), response=True)
         print("Heating OFF")
-
+    '''
     # Environment Node
     env_task = asyncio.create_task(
         maintain_node(
@@ -178,7 +223,7 @@ async def main():
         )
     )
 
-    await asyncio.gather(env_task, window_task)
-
+    await asyncio.gather(env_task, window_task, evaluate_rules())
+    
 if __name__ == "__main__":
     asyncio.run(main())
