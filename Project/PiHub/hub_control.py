@@ -126,14 +126,14 @@ def handle_window_notification(sender, data):
     if msg_type == MSG_TYPE_SENSOR:
         window = system_state["window"]
         if value1 == 1:
-            window = "open"
+            window_state = "open"
             window["state"] = "open"
         else:
-            window = "close"
+            window_state = "close"
             window["state"] = "close"
         print(
             f"WIN notification: node={node_id}, type={msg_type}, "
-            f"seq={seq}, sensor={sensor_type}, window={window}"
+            f"seq={seq}, sensor={sensor_type}, window={window_state}"
         )
 
 async def maintain_node(name, notification_handler):
