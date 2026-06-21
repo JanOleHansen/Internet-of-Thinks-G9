@@ -8,7 +8,7 @@ in hub_control.py
 # Returns true if command should be sent to turn on the light
 # Returns false if command should be sent to turn off the light
 def checkLight(light, motion, on_time: datetime, now_time: datetime):
-    if light == "off" and motion == "on":
+    if light == False and motion == True:
         return True
     timediff = now_time - on_time
     # Turn off light after 5 minutes of no motion
