@@ -51,6 +51,7 @@ volatile bool already_sent = false;
 
 static bool central_connected = false;
 static bool sensor_notify_enabled;
+static bool heartbeat_notify_enabled;
 struct bt_conn *conn_hub;
 
 static const struct bt_data ad[] = {
@@ -64,6 +65,16 @@ struct bt_gatt_data  {
     uint16_t sequence_number;
     uint16_t payload[3];
 };
+
+static void heartbeat_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                   uint16_t value)
+{
+    heartbeat_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+
+    printk("Heartbeat notifications %s\n",
+           heartbeat_notify_enabled ? "enabled" : "disabled");
+}
+
 static void sensor_ccc_cfg_changed(const struct bt_gatt_attr *attr,
                                    uint16_t value)
 {
@@ -80,12 +91,18 @@ static void sensor_ccc_cfg_changed(const struct bt_gatt_attr *attr,
 #define BT_UUID_SENSOR_CHAR \
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1)
 static struct bt_uuid_128 sensor_uuid = BT_UUID_INIT_128(BT_UUID_SENSOR_CHAR);
+#define BT_UUID_HEARTBEAT_CHAR \
+    BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef2)
+static struct bt_uuid_128 heartbeat_uuid = BT_UUID_INIT_128(BT_UUID_HEARTBEAT_CHAR);
 // Sensor Service Declarationn
 BT_GATT_SERVICE_DEFINE(sensor_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_128(BT_UUID_SENSOR_PRIMARY_VAL)),
     BT_GATT_CHARACTERISTIC(&sensor_uuid.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE,
         NULL, NULL, NULL),
     BT_GATT_CCC(sensor_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    BT_GATT_CHARACTERISTIC(&heartbeat_uuid.uuid, BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE,
+        NULL, NULL, NULL),
+    BT_GATT_CCC(heartbeat_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 );
 
 // Callback handler Function for button interrupt
@@ -103,6 +120,27 @@ void button_cb(const struct device *port, struct gpio_callback *cb, gpio_port_pi
 	    }
 	}
     return;
+}
+
+static int send_heartbeat()
+{
+    if (!conn_hub || !heartbeat_notify_enabled) {
+        printk("No connection or notifications disabled\n");
+        return -ENOTCONN;
+    }
+
+    struct bt_gatt_data pkt;
+    pkt.node_id = WIN_NODE;
+    pkt.msg_type = HEARTBEAT;
+    pkt.sequence_number = seq_num;
+    pkt.payload[0] = 0;
+    pkt.payload[1] = 0;
+    pkt.payload[2] = 0;
+    seq_num ++;
+    return bt_gatt_notify(conn_hub,
+                          &sensor_svc.attrs[5],
+                          &pkt,
+                          sizeof(pkt));
 }
 
 static int send_sensor_packet(struct bt_gatt_data *pkt)
@@ -157,6 +195,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     }
     central_connected = false;
     sensor_notify_enabled = false;
+    heartbeat_notify_enabled = false;
 }
 
 // Define connection callbacks
@@ -222,7 +261,8 @@ void main(void)
 	gpio_add_callback(dev_button, &button_cb_struct);
 
     // Send Advertising Data to give Central opportunity to connect with EnvironmentNode
-    while (!central_connected){
+    while (!central_connected || !sensor_notify_enabled || 
+        !heartbeat_notify_enabled){
         k_sleep(K_MSEC(200));
     }
 
@@ -252,6 +292,11 @@ void main(void)
             }
             printk("Window packet CLOSED was send");
         }
-        k_sleep(K_MSEC(200));
+        // Send Heartbeat via Notification
+        err = send_heartbeat();
+        if (err != 0){
+            printk("Sending Heartbeat failed\n");
+        }
+        k_sleep(K_SECONDS(1));
     }
 }

@@ -9,6 +9,7 @@ COMMAND_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
 
 ENV_NODE_NAME = "ENV_NODE"
 SENSOR_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef1"
+HEARTBEAT_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef2"
 
 WIN_NODE_NAME = "WIN_NODE"
 
@@ -71,9 +72,9 @@ def handle_env_notification(sender, data):
     if node_id != 1:
         print("Didn't received expected node_id")
         return
+    environment = system_state["environment"]
     if msg_type == MSG_TYPE_SENSOR:
         global light_on_time
-        environment = system_state["environment"]
         if sensor_type == TEMP_SENSOR:
             temp = str(value1) + "." + str(value2)
             print(
@@ -116,6 +117,10 @@ def handle_env_notification(sender, data):
             )
         else:
             print("Didn't received expected msg_type")
+    elif msg_type == MSG_TYPE_HEARTBEAT:
+        print("Environment Node is living")
+        environment["last_seen"] = datetime.now(None).isoformat()
+        
 
 # Function to handle incoming notifications from WIN_NODE
 def handle_window_notification(sender, data):
@@ -123,8 +128,8 @@ def handle_window_notification(sender, data):
     if node_id != 2:
         print("Didn't received expected node_id")
         return
+    window = system_state["window"]
     if msg_type == MSG_TYPE_SENSOR:
-        window = system_state["window"]
         if value1 == 1:
             window_state = "open"
             window["state"] = "open"
@@ -135,6 +140,9 @@ def handle_window_notification(sender, data):
             f"WIN notification: node={node_id}, type={msg_type}, "
             f"seq={seq}, sensor={sensor_type}, window={window_state}"
         )
+    elif msg_type == MSG_TYPE_HEARTBEAT:
+        print("Window Node is living")
+        window["last_seen"] = datetime.now(None).isoformat()
 
 async def maintain_node(name, notification_handler):
     while True:
@@ -156,6 +164,7 @@ async def maintain_node(name, notification_handler):
             async with BleakClient(device, disconnected_callback=on_disconnect) as client:
                 print(f"{name} connected")
                 await client.start_notify(SENSOR_CHAR_UUID,notification_handler)
+                await client.start_notify(HEARTBEAT_CHAR_UUID,notification_handler)
 
                 # Let the connection open
                 await disconnected.wait()

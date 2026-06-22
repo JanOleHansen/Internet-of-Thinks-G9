@@ -17,8 +17,40 @@ async function updateDashboard() {
   document.getElementById("window").innerText =
     "Window: " + state.window.state;
 
-  document.getElementById("heating").innerText =
-    "Heating: " + state.actuator.heating;
+  //document.getElementById("heating").innerText =
+  //  "Heating: " + state.actuator.heating;
+  updateHeartbeat(state.environment.last_seen, "env-status");
+  updateHeartbeat(state.window.last_seen, "window-status");
+}
+
+function updateHeartbeat(lastSeen, ledId) {
+
+    const led = document.getElementById(ledId);
+
+    if (!lastSeen) {
+
+        led.classList.remove("online");
+        led.classList.add("offline");
+        return;
+    }
+
+    const last = new Date(lastSeen);
+
+    const now = new Date();
+
+    const diff = (now - last) / 1000;
+
+    if (diff <= 15) {
+
+        led.classList.remove("offline");
+        led.classList.add("online");
+
+    } else {
+
+        led.classList.remove("online");
+        led.classList.add("offline");
+    }
+
 }
 
 setInterval(updateDashboard, 1000);

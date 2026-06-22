@@ -54,3 +54,45 @@ h1 {
 .light .value { color: #facc15; }
 .window .value { color: #22c55e; }
 .motion .value { color: #f97316; }
+
+/* ---------- Node Sections ---------- */
+
+.node {
+    background: #1e293b;
+    border-radius: 20px;
+    padding: 25px;
+    margin-bottom: 35px;
+}
+
+.node-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.node-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+/* ---------- Heartbeat LED ---------- */
+
+.status-led {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: red;
+    box-shadow: 0 0 12px red;
+}
+
+.status-led.online {
+    background: #22c55e;
+    box-shadow: 0 0 12px #22c55e;
+}
+
+.status-led.offline {
+    background: #ef4444;
+    box-shadow: 0 0 12px #ef4444;
+}
