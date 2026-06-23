@@ -56,5 +56,7 @@ COMMANDS
 	HEATING_OF 4
 	WINDOW_OPEN 5
 	WINDOW_CLOSE 6
-		
+
+ACK
+	uint16_t received_seq_id => soll die seq_id sein, auf die sich der ACK bezieht (also seq_id vom zugehörigen COMMAND)
 
