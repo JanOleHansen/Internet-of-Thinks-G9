@@ -268,11 +268,10 @@ void main(void)
 
     while(1){
         if (button_is_on && !already_sent){
-            printk("while-Loop yes");
             already_sent = true;
             // Save Window Data in packet
             struct bt_gatt_data window_packet;
-            createDataPacket(&window_packet, MOTION_SENSOR, 1, 0);
+            createDataPacket(&window_packet, WINDOW_SENSOR, 1, 0);
             // Send packet via Notification
             err = send_sensor_packet(&window_packet);
             if (err != 0){
@@ -280,11 +279,10 @@ void main(void)
             }
             printk("Window packet OPEN was send");
         } else if (!button_is_on && already_sent) {
-            printk("while-Loop no");
             already_sent = false;
             // Save Window Data in packet
             struct bt_gatt_data window_packet;
-            createDataPacket(&window_packet, MOTION_SENSOR, 0, 0);
+            createDataPacket(&window_packet, WINDOW_SENSOR, 0, 0);
             // Send packet via Notification
             err = send_sensor_packet(&window_packet);
             if (err != 0){
