@@ -195,7 +195,7 @@ async def evaluate_rules():
 
 async def main():
     # Actuator Node
-    '''
+    
     print(f"Scanning for '{ACT_NODE_NAME}'...")
     device = await BleakScanner.find_device_by_name(ACT_NODE_NAME, timeout=10.0)
     if device is None:
@@ -217,7 +217,7 @@ async def main():
         print("Light OFF")
         await client.write_gatt_char(COMMAND_CHAR_UUID, build_message(2, COMMAND_HEATING_OFF), response=True)
         print("Heating OFF")
-    '''
+    
     # Environment Node
     env_task = asyncio.create_task(
         maintain_node(
