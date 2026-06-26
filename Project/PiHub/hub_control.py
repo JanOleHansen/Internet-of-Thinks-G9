@@ -6,7 +6,7 @@ from datetime import *
 from state import system_state
 ACT_NODE_NAME = "ACT_NODE"
 COMMAND_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
-
+ACK_CHAR_UUID = "0000fff2-0000-1000-8000-00805f9b34fb"
 ENV_NODE_NAME = "ENV_NODE"
 SENSOR_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef1"
 HEARTBEAT_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef2"
@@ -43,9 +43,12 @@ curr_hum = None
 curr_window = None
 curr_motion = None'''
 
+seq_num = 0
+pending_acks = {}
+ACK_TIMEOUT = 2.0
+MAX_RETRIES = 3
 
-
-
+# Sending commands
 def build_message(sequence_number: int, command: int) -> bytearray:
     message = bytearray()
     message.append(NODE_ID)
@@ -53,6 +56,61 @@ def build_message(sequence_number: int, command: int) -> bytearray:
     message += sequence_number.to_bytes(2, "little")
     message += command.to_bytes(2, "little")
     return message
+
+# Parse ACK Packets
+def parse_ack_packet(data: bytearray):
+    node_id = data[0]
+    msg_type = data[1]
+    seq = int.from_bytes(data[2:4], "little")
+
+    acked_seq = int.from_bytes(data[4:6], "little")
+    status = data[6]
+
+    return node_id, msg_type, seq, acked_seq, status
+
+# Function to parse incoming data from ACT_NODE
+def handle_ack_notification(sender, data):
+    node_id, msg_type, seq, acked_seq, status = parse_ack_packet(data)
+
+    if msg_type != MSG_TYPE_ACK:
+        return
+
+    print(f"ACK received: acked_seq={acked_seq}, status={status}")
+
+    future = pending_acks.get(acked_seq)
+
+    if future and not future.done():
+        future.set_result(status)
+
+# Sending commands and search for associated ACKs
+async def send_command_with_retry(client: BleakClient, command: int) -> bool:
+    for attempt in range(1, MAX_RETRIES + 1):
+        global seq_num
+        seq_num += 1
+
+        loop = asyncio.get_running_loop()
+        ack_future = loop.create_future()
+        pending_acks[seq_num] = ack_future
+
+        print(f"Sending command={command}, seq={seq_num}, attempt={attempt}")
+
+        await client.write_gatt_char(
+            COMMAND_CHAR_UUID,
+            build_message(seq_num, command),
+            response=True
+        )
+
+        try:
+            status = await asyncio.wait_for(ack_future, timeout=ACK_TIMEOUT)
+
+            pending_acks.pop(seq_num, None)
+
+        except asyncio.TimeoutError:
+            pending_acks.pop(seq_num, None)
+            print(f"No ACK for seq={seq_num}, retrying...")
+
+    print(f"Command failed after {MAX_RETRIES} attempts")
+    return False
 
 # Function to parse incoming sensor packet
 def parse_sensor_message(data: bytearray):
@@ -77,17 +135,9 @@ def handle_env_notification(sender, data):
         global light_on_time
         if sensor_type == TEMP_SENSOR:
             temp = str(value1) + "." + str(value2)
-            print(
-                f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, temp={temp} C"
-            )
             environment["temperature"] = float(temp)
         elif sensor_type == HUM_SENSOR:
             humidity = str(value1) + "." + str(value2)
-            print(
-                f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, humidity={humidity} %"
-            )
             environment["humidity"] = float(humidity)
         elif sensor_type == LIGHT_SENSOR:
             if value1 == 0:
@@ -97,11 +147,7 @@ def handle_env_notification(sender, data):
                     light_on_time = datetime.now(None) 
             else:
                 light = "off"
-                environment["light"] = False 
-            print(
-                f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, light={light}"
-            )
+                environment["light"] = False
         elif sensor_type == MOTION_SENSOR:
             if value1 == 1:
                 motion = "yes"
@@ -111,14 +157,9 @@ def handle_env_notification(sender, data):
             else:
                 motion = "no"
                 environment["motion"] = False
-            print(
-                f"ENV notification: node={node_id}, type={msg_type}, "
-                f"seq={seq}, sensor={sensor_type}, motion={motion}"
-            )
         else:
             print("Didn't received expected msg_type")
     elif msg_type == MSG_TYPE_HEARTBEAT:
-        print("Environment Node is living")
         environment["last_seen"] = datetime.now(None).isoformat()
         
 
@@ -136,12 +177,7 @@ def handle_window_notification(sender, data):
         else:
             window_state = "close"
             window["state"] = "close"
-        print(
-            f"WIN notification: node={node_id}, type={msg_type}, "
-            f"seq={seq}, sensor={sensor_type}, window={window_state}"
-        )
     elif msg_type == MSG_TYPE_HEARTBEAT:
-        print("Window Node is living")
         window["last_seen"] = datetime.now(None).isoformat()
 
 async def maintain_node(name, notification_handler):
@@ -195,7 +231,6 @@ async def evaluate_rules():
 
 async def main():
     # Actuator Node
-    
     print(f"Scanning for '{ACT_NODE_NAME}'...")
     device = await BleakScanner.find_device_by_name(ACT_NODE_NAME, timeout=10.0)
     if device is None:
@@ -217,7 +252,7 @@ async def main():
         print("Light OFF")
         await client.write_gatt_char(COMMAND_CHAR_UUID, build_message(2, COMMAND_HEATING_OFF), response=True)
         print("Heating OFF")
-    
+
     # Environment Node
     env_task = asyncio.create_task(
         maintain_node(
