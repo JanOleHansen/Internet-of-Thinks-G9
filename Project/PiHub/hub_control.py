@@ -62,25 +62,22 @@ def parse_ack_packet(data: bytearray):
     node_id = data[0]
     msg_type = data[1]
     seq = int.from_bytes(data[2:4], "little")
-
     acked_seq = int.from_bytes(data[4:6], "little")
-    status = data[6]
-
-    return node_id, msg_type, seq, acked_seq, status
+    return node_id, msg_type, seq, acked_seq
 
 # Function to parse incoming data from ACT_NODE
 def handle_ack_notification(sender, data):
-    node_id, msg_type, seq, acked_seq, status = parse_ack_packet(data)
+    node_id, msg_type, seq, acked_seq = parse_ack_packet(data)
 
     if msg_type != MSG_TYPE_ACK:
         return
 
-    print(f"ACK received: acked_seq={acked_seq}, status={status}")
+    print(f"ACK received: acked_seq={acked_seq}")
 
     future = pending_acks.get(acked_seq)
 
     if future and not future.done():
-        future.set_result(status)
+        future.set_result(True)
 
 # Sending commands and search for associated ACKs
 async def send_command_with_retry(client: BleakClient, command: int) -> bool:
@@ -101,9 +98,10 @@ async def send_command_with_retry(client: BleakClient, command: int) -> bool:
         )
 
         try:
-            status = await asyncio.wait_for(ack_future, timeout=ACK_TIMEOUT)
-
+            await asyncio.wait_for(ack_future, timeout=ACK_TIMEOUT)
             pending_acks.pop(seq_num, None)
+            print(f"Command ACK received, seq={seq_num}")
+            return True
 
         except asyncio.TimeoutError:
             pending_acks.pop(seq_num, None)
@@ -199,9 +197,11 @@ async def maintain_node(name, notification_handler):
 
             async with BleakClient(device, disconnected_callback=on_disconnect) as client:
                 print(f"{name} connected")
-                await client.start_notify(SENSOR_CHAR_UUID,notification_handler)
-                await client.start_notify(HEARTBEAT_CHAR_UUID,notification_handler)
-
+                if name != ACT_NODE_NAME:
+                    await client.start_notify(SENSOR_CHAR_UUID,notification_handler)
+                    await client.start_notify(HEARTBEAT_CHAR_UUID,notification_handler)
+                else:
+                    await client.start_notify(ACK_CHAR_UUID, notification_handler)
                 # Let the connection open
                 await disconnected.wait()
 
@@ -220,17 +220,36 @@ async def evaluate_rules():
         if all(v is not None for v in
                (window["state"], environment["humidity"], environment["motion"], 
                 environment["temperature"], environment["light"], light_on_time)):
-            print("Window CMD:", checkWindow(window["state"], environment["temperature"], 
-                                             environment["humidity"]))
-            print("Heating CMD:", checkHeating(environment["temperature"], window["state"]))
-            print("Light CMD:", checkLight(
-                environment["light"], environment["motion"], light_on_time, datetime.now()
-            ))
+            window_res = checkWindow(window["state"], environment["temperature"], environment["humidity"])
+            print("Window CMD:", window_res)
+            if window_res == True: # open the window
+                pass
+            elif window_res == False: # close the window
+                pass
+            heating_res = checkHeating(environment["temperature"], window["state"])
+            print("Heating CMD:", heating_res)
+            if heating_res == True: # turn on heating
+                pass
+            elif heating_res == False: # Turn off heating
+                pass
+            light_res = checkLight(environment["light"], environment["motion"], light_on_time, datetime.now())
+            print("Light CMD:", light_res)
+            if light_res == True: # Turn on light
+                pass
+            elif light_res == False: # Turn off light
+                pass
 
         await asyncio.sleep(1)
 
 async def main():
     # Actuator Node
+    act_task = asyncio.create_task(
+        maintain_node(
+            ACT_NODE_NAME,
+            handle_ack_notification
+        )
+    )
+    ''' Old code:
     print(f"Scanning for '{ACT_NODE_NAME}'...")
     device = await BleakScanner.find_device_by_name(ACT_NODE_NAME, timeout=10.0)
     if device is None:
@@ -252,7 +271,7 @@ async def main():
         print("Light OFF")
         await client.write_gatt_char(COMMAND_CHAR_UUID, build_message(2, COMMAND_HEATING_OFF), response=True)
         print("Heating OFF")
-
+    '''
     # Environment Node
     env_task = asyncio.create_task(
         maintain_node(
@@ -269,7 +288,7 @@ async def main():
         )
     )
 
-    await asyncio.gather(env_task, window_task, evaluate_rules())
+    await asyncio.gather(act_task, env_task, window_task, evaluate_rules())
     
 if __name__ == "__main__":
     asyncio.run(main())
