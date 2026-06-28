@@ -369,22 +369,21 @@ void main(void)
                    dht.temp_dec,
                    dht.humidity_int,
                    dht.humidity_dec);
+            // Save DHT11 Data in two packets and send
+            struct bt_gatt_data temp_packet;
+            createDataPacket(&temp_packet, TEMP_SENSOR, dht.temp_int, dht.temp_dec);
+            struct bt_gatt_data hum_packet;
+            createDataPacket(&hum_packet, HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
+            err = send_sensor_packet(&temp_packet);
+            if (err != 0){
+                printk("Sending Temperaturepacket failed\n");
+            }
+            err = send_sensor_packet(&hum_packet);
+            if (err != 0){
+                printk("Sending Humiditypacket failed\n");
+            }
         } else {
             printk("DHT11 read failed: %d\n", ret);
-        }
-        // Save DHT11 Data in two packets
-        struct bt_gatt_data temp_packet;
-        createDataPacket(&temp_packet, TEMP_SENSOR, dht.temp_int, dht.temp_dec);
-        struct bt_gatt_data hum_packet;
-        createDataPacket(&hum_packet, HUM_SENSOR, dht.humidity_int, dht.humidity_dec);
-        // TODO: Send packets via Notification
-        err = send_sensor_packet(&temp_packet);
-        if (err != 0){
-            printk("Sending Temperaturepacket failed\n");
-        }
-        err = send_sensor_packet(&hum_packet);
-        if (err != 0){
-            printk("Sending Humiditypacket failed\n");
         }
         // Read Light Sensor
         int value = gpio_pin_get(gpio1, LIGHT_PIN);

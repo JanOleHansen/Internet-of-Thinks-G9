@@ -54,6 +54,8 @@ h1 {
 .light .value { color: #facc15; }
 .window .value { color: #22c55e; }
 .motion .value { color: #f97316; }
+.lighting .value { color: #facc15; }
+.heating .value { color: #ef4444; }
 
 /* ---------- Node Sections ---------- */
 

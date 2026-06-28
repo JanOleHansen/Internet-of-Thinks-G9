@@ -17,10 +17,12 @@ async function updateDashboard() {
   document.getElementById("window").innerText =
     "Window: " + state.window.state;
 
-  //document.getElementById("heating").innerText =
-  //  "Heating: " + state.actuator.heating;
+  document.getElementById("lighting").innerText = state.actuator.lighting;
+  document.getElementById("heating").innerText = state.actuator.heating;
+
   updateHeartbeat(state.environment.last_seen, "env-status");
   updateHeartbeat(state.window.last_seen, "window-status");
+  updateHeartbeat(state.actuator.last_seen, "act-status");
 }
 
 function updateHeartbeat(lastSeen, ledId) {
