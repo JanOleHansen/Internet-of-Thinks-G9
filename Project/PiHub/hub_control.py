@@ -223,7 +223,7 @@ async def evaluate_rules():
             window_res = checkWindow(window["state"], environment["temperature"], environment["humidity"])
             print("Window CMD:", window_res)
             if window_res == True: # open the window
-                pass
+                send_command_with_retry()
             elif window_res == False: # close the window
                 pass
             heating_res = checkHeating(environment["temperature"], window["state"])
