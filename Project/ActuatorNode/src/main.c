@@ -7,11 +7,15 @@
 #include <string.h>
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
+#include <bluetooth/conn.h>
+#include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 
 // Define constants for node ID, message types, and commands
 #define ACT_NODE_ID 3
 #define MSG_TYPE_COMMAND 2
+#define MSG_TYPE_ACK 3
+#define MSG_TYPE_HEARTBEAT 4
 #define COMMAND_LIGHT_ON 1
 #define COMMAND_LIGHT_OFF 2
 #define COMMAND_HEATING_ON 3
@@ -20,21 +24,24 @@
 // Define the blink interval in milliseconds
 #define BLINK_INTERVAL_MS 500
 
+#define LED_PIN 10
 #define SERVO_PIN 11
 #define SERVO_PERIOD_US 20000
 #define SERVO_MIN_US 1000
 #define SERVO_MID_US 1500
 #define SERVO_MAX_US 2000
 
-// Declare global variables for the LED device, pin, and label
-static const struct device *led_dev;
-static const gpio_pin_t led_pin = DT_GPIO_PIN(DT_ALIAS(led0), gpios);
-static const char *led_label = DT_GPIO_LABEL(DT_ALIAS(led0), gpios);
 static volatile bool blink_enabled;
 static struct k_timer blink_timer;
 static struct k_work led_toggle_work;
 
-// Declare global variables for the servo control
+// BLE connection state
+static bool central_connected = false;
+static bool ack_notify_enabled = false;
+static bool heartbeat_notify_enabled = false;
+struct bt_conn *conn_hub;
+uint16_t seq_num = 0;
+
 static const struct device *gpio1 = DEVICE_DT_GET(DT_NODELABEL(gpio1));
 static struct k_timer servo_timer;
 
@@ -50,10 +57,17 @@ struct msg_frame {
     uint16_t command;
 } __packed;
 
+struct ack_frame {
+    uint8_t node_id;
+    uint8_t msg_type;
+    uint16_t sequence_number;
+    uint16_t acked_seq;
+} __packed;
+
 static void led_toggle_work_handler(struct k_work *work)
 {
     if (blink_enabled) {
-        gpio_pin_toggle(led_dev, led_pin);
+        gpio_pin_toggle(gpio1, LED_PIN);
     }
 }
 
@@ -120,6 +134,24 @@ static void servo_set_angle(int angle)
     servo_start(pulse_us);
 }
 
+static int send_ack(uint16_t acked_seq);
+
+static void ack_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                uint16_t value)
+{
+    ack_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+    printk("ACK notifications %s\n",
+           ack_notify_enabled ? "enabled" : "disabled");
+}
+
+static void heartbeat_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                      uint16_t value)
+{
+    heartbeat_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+    printk("Heartbeat notifications %s\n",
+           heartbeat_notify_enabled ? "enabled" : "disabled");
+}
+
 static ssize_t write_command(struct bt_conn *conn,
                              const struct bt_gatt_attr *attr,
                              const void *buf,
@@ -156,14 +188,14 @@ static ssize_t write_command(struct bt_conn *conn,
     switch (command) {
     case COMMAND_LIGHT_ON:
         blink_enabled = true;
-        gpio_pin_set(led_dev, led_pin, 1);
+        gpio_pin_set(gpio1, LED_PIN, 1);
         k_timer_start(&blink_timer, K_MSEC(BLINK_INTERVAL_MS), K_MSEC(BLINK_INTERVAL_MS));
         printk("ACT_NODE: LIGHT_ON received\n");
         break;
     case COMMAND_LIGHT_OFF:
         blink_enabled = false;
         k_timer_stop(&blink_timer);
-        gpio_pin_set(led_dev, led_pin, 0);
+        gpio_pin_set(gpio1, LED_PIN, 0);
         printk("ACT_NODE: LIGHT_OFF received\n");
         break;
     case COMMAND_HEATING_ON:
@@ -179,22 +211,106 @@ static ssize_t write_command(struct bt_conn *conn,
         break;
     }
 
+    int ret = send_ack(msg.sequence_number);
+    if (ret != 0) {
+        printk("Sending ACK failed (err %d)\n", ret);
+    }
+
     return len;
 }
 
 BT_GATT_SERVICE_DEFINE(actuator_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(0xFFF0)),
+    // attrs[1,2]: command write characteristic
     BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0xFFF1),
                            BT_GATT_CHRC_WRITE,
                            BT_GATT_PERM_WRITE,
                            NULL,
                            write_command,
-                           NULL)
+                           NULL),
+    // attrs[3,4,5]: ACK notify characteristic
+    BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0xFFF2),
+                           BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_NONE,
+                           NULL, NULL, NULL),
+    BT_GATT_CCC(ack_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    // attrs[6,7,8]: heartbeat notify characteristic
+    BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0xFFF3),
+                           BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_NONE,
+                           NULL, NULL, NULL),
+    BT_GATT_CCC(heartbeat_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 );
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR),
     BT_DATA(BT_DATA_NAME_COMPLETE, "ACT_NODE", 8),
+};
+
+static int send_ack(uint16_t acked_seq)
+{
+    if (!conn_hub || !ack_notify_enabled) {
+        printk("No connection or ACK notifications disabled\n");
+        return -ENOTCONN;
+    }
+
+    struct ack_frame pkt;
+    pkt.node_id = ACT_NODE_ID;
+    pkt.msg_type = MSG_TYPE_ACK;
+    pkt.sequence_number = seq_num;
+    pkt.acked_seq = acked_seq;
+    seq_num++;
+    return bt_gatt_notify(conn_hub,
+                          &actuator_svc.attrs[4],
+                          &pkt,
+                          sizeof(pkt));
+}
+
+static int send_heartbeat(void)
+{
+    if (!conn_hub || !heartbeat_notify_enabled) {
+        printk("No connection or heartbeat notifications disabled\n");
+        return -ENOTCONN;
+    }
+
+    struct msg_frame pkt;
+    pkt.node_id = ACT_NODE_ID;
+    pkt.msg_type = MSG_TYPE_HEARTBEAT;
+    pkt.sequence_number = seq_num;
+    pkt.command = 0;
+    seq_num++;
+    return bt_gatt_notify(conn_hub,
+                          &actuator_svc.attrs[7],
+                          &pkt,
+                          sizeof(pkt));
+}
+
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+    if (err) {
+        printk("Connection failed (err %u)\n", err);
+        return;
+    }
+    central_connected = true;
+    printk("Central connected\n");
+    conn_hub = bt_conn_ref(conn);
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+    printk("Central disconnected (reason %u)\n", reason);
+    if (conn_hub) {
+        bt_conn_unref(conn_hub);
+        conn_hub = NULL;
+    }
+    central_connected = false;
+    ack_notify_enabled = false;
+    heartbeat_notify_enabled = false;
+}
+
+static struct bt_conn_cb conn_callbacks = {
+    .connected = connected,
+    .disconnected = disconnected,
 };
 
 static void bt_ready(int err)
@@ -205,6 +321,7 @@ static void bt_ready(int err)
     }
 
     printk("Bluetooth initialized\n");
+    bt_conn_cb_register(&conn_callbacks);
 
     err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err) {
@@ -221,20 +338,14 @@ void main(void)
 
     printk("Starting ACT_NODE firmware\n");
 
-    led_dev = device_get_binding(led_label);
-    if (!led_dev) {
-        printk("Failed to bind LED device %s\n", led_label);
-        return;
-    }
-
-    err = gpio_pin_configure(led_dev, led_pin, GPIO_OUTPUT_INACTIVE);
-    if (err) {
-        printk("Failed to configure LED pin %d (err %d)\n", led_pin, err);
-        return;
-    }
-
     if (!device_is_ready(gpio1)) {
         printk("Failed to get gpio1 device\n");
+        return;
+    }
+
+    err = gpio_pin_configure(gpio1, LED_PIN, GPIO_OUTPUT_INACTIVE);
+    if (err) {
+        printk("Failed to configure LED pin %d (err %d)\n", LED_PIN, err);
         return;
     }
 
@@ -255,7 +366,15 @@ void main(void)
         return;
     }
 
+    while (!central_connected || !ack_notify_enabled || !heartbeat_notify_enabled) {
+        k_sleep(K_MSEC(200));
+    }
+
     while (1) {
+        err = send_heartbeat();
+        if (err != 0) {
+            printk("Sending Heartbeat failed\n");
+        }
         k_sleep(K_SECONDS(1));
     }
 }
