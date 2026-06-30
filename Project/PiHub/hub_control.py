@@ -46,6 +46,7 @@ curr_motion = None'''
 
 seq_num = 0
 pending_acks = {}
+command_lock = asyncio.Lock()
 ACK_TIMEOUT = 2.0
 MAX_RETRIES = 3
 act_client = None
@@ -76,34 +77,37 @@ def parse_ack_packet(data: bytearray):
 
 # Sending commands and search for associated ACKs
 async def send_command_with_retry(client: BleakClient, command: int) -> bool:
-    for attempt in range(1, MAX_RETRIES + 1):
-        global seq_num
-        seq_num += 1
+    global seq_num
 
-        loop = asyncio.get_running_loop()
-        ack_future = loop.create_future()
-        pending_acks[seq_num] = ack_future
+    async with command_lock:
+        for attempt in range(1, MAX_RETRIES + 1):
+            seq_num += 1
+            current_seq = seq_num
 
-        print(f"Sending command={command}, seq={seq_num}, attempt={attempt}")
+            loop = asyncio.get_running_loop()
+            ack_future = loop.create_future()
+            pending_acks[current_seq] = ack_future
 
-        await client.write_gatt_char(
-            COMMAND_CHAR_UUID,
-            build_message(seq_num, command),
-            response=True
-        )
+            print(f"Sending command={command}, seq={current_seq}, attempt={attempt}")
 
-        try:
-            await asyncio.wait_for(ack_future, timeout=ACK_TIMEOUT)
-            pending_acks.pop(seq_num, None)
-            print(f"Command ACK received, seq={seq_num}")
-            return True
+            try:
+                await client.write_gatt_char(
+                    COMMAND_CHAR_UUID,
+                    build_message(current_seq, command),
+                    response=True
+                )
 
-        except asyncio.TimeoutError:
-            pending_acks.pop(seq_num, None)
-            print(f"No ACK for seq={seq_num}, retrying...")
+                await asyncio.wait_for(ack_future, timeout=ACK_TIMEOUT)
+                print(f"Command ACK received, seq={current_seq}")
+                return True
 
-    print(f"Command failed after {MAX_RETRIES} attempts")
-    return False
+            except asyncio.TimeoutError:
+                print(f"No ACK for seq={current_seq}, retrying...")
+            finally:
+                pending_acks.pop(current_seq, None)
+
+        print(f"Command failed after {MAX_RETRIES} attempts")
+        return False
 
 # Combined handler for ACT_NODE: handles ACK and HEARTBEAT notifications
 def handle_act_notification(sender, data):
