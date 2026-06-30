@@ -154,17 +154,14 @@ def handle_env_notification(sender, data):
         elif sensor_type == LIGHT_SENSOR:
             if value1 == 0:
                 light = "on"
-                if not environment["light"]: # Light was not on before, so start timer
-                    environment["light"] = True 
-                    light_on_time = datetime.now(None) 
+                environment["light"] = True
             else:
                 light = "off"
                 environment["light"] = False
         elif sensor_type == MOTION_SENSOR:
             if value1 == 1:
                 motion = "yes"
-                if environment["light"]: # Update time because there is still motion in the room
-                    light_on_time = datetime.now(None)
+                light_on_time = datetime.now(None)
                 environment["motion"] = True
             else:
                 motion = "no"
