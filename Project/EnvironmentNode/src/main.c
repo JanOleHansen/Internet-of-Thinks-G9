@@ -60,7 +60,7 @@ struct bt_conn *conn_hub;
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME)),
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 struct dht11_data {
     uint8_t humidity_int;
@@ -176,6 +176,13 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     central_connected = false;
     sensor_notify_enabled = false;
     heartbeat_notify_enabled = false;
+
+    int err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, NULL);
+    if (err) {
+        printk("Restarting advertising failed (err %d)\n", err);
+    } else {
+        printk("Advertising restarted\n");
+    }
 }
 
 // Define connection callbacks

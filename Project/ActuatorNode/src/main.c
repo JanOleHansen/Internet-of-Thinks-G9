@@ -286,6 +286,13 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     central_connected = false;
     ack_notify_enabled = false;
     heartbeat_notify_enabled = false;
+
+    int err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
+    if (err) {
+        printk("Restarting advertising failed (err %d)\n", err);
+    } else {
+        printk("Advertising restarted\n");
+    }
 }
 
 static struct bt_conn_cb conn_callbacks = {

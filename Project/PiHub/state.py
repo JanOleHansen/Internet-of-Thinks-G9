@@ -13,7 +13,9 @@ system_state = {
     "actuator": {
         "lighting": "off",
         "heating": "off",
-        "last_seen": None
+        "last_seen": None,
+        "lighting_override_until": None,
+        "heating_override_until": None
     }
 }
 
