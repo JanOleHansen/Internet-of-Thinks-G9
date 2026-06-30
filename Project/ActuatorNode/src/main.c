@@ -21,8 +21,6 @@
 #define COMMAND_HEATING_ON 3
 #define COMMAND_HEATING_OFF 4
 
-// Define the blink interval in milliseconds
-#define BLINK_INTERVAL_MS 500
 
 #define LED_PIN 10
 #define SERVO_PIN 11
@@ -31,9 +29,6 @@
 #define SERVO_MID_US 1500
 #define SERVO_MAX_US 2000
 
-static volatile bool blink_enabled;
-static struct k_timer blink_timer;
-static struct k_work led_toggle_work;
 
 // BLE connection state
 static bool central_connected = false;
@@ -64,17 +59,6 @@ struct ack_frame {
     uint16_t acked_seq;
 } __packed;
 
-static void led_toggle_work_handler(struct k_work *work)
-{
-    if (blink_enabled) {
-        gpio_pin_toggle(gpio1, LED_PIN);
-    }
-}
-
-static void blink_timer_expiry(struct k_timer *timer_id)
-{
-    k_work_submit(&led_toggle_work);
-}
 
 static void servo_timer_handler(struct k_timer *timer)
 {
@@ -187,14 +171,10 @@ static ssize_t write_command(struct bt_conn *conn,
     uint16_t command = msg.command;
     switch (command) {
     case COMMAND_LIGHT_ON:
-        blink_enabled = true;
         gpio_pin_set(gpio1, LED_PIN, 1);
-        k_timer_start(&blink_timer, K_MSEC(BLINK_INTERVAL_MS), K_MSEC(BLINK_INTERVAL_MS));
         printk("ACT_NODE: LIGHT_ON received\n");
         break;
     case COMMAND_LIGHT_OFF:
-        blink_enabled = false;
-        k_timer_stop(&blink_timer);
         gpio_pin_set(gpio1, LED_PIN, 0);
         printk("ACT_NODE: LIGHT_OFF received\n");
         break;
@@ -355,10 +335,7 @@ void main(void)
         return;
     }
 
-    k_work_init(&led_toggle_work, led_toggle_work_handler);
-    k_timer_init(&blink_timer, blink_timer_expiry, NULL);
     k_timer_init(&servo_timer, servo_timer_handler, NULL);
-    blink_enabled = false;
 
     err = bt_enable(bt_ready);
     if (err) {
