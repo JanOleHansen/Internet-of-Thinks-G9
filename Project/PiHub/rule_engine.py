@@ -10,8 +10,6 @@ in hub_control.py
 def checkLight(light, motion, on_time: datetime, now_time: datetime):
     if light == False and motion == True:
         return True
-    elif light == False:
-        return False
     timediff = now_time - on_time
     # Turn off light after 30 seconds of no motion
     # on_time is always resetted in hub_control.py, if motion was detected
