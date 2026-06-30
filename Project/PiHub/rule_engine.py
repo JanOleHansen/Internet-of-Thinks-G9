@@ -26,9 +26,9 @@ def checkLight(light, motion, on_time: datetime, now_time: datetime):
 def checkHeating(temp, window):
     if window == "open":
         return False
-    if temp > 21.0:
+    if temp > 30.0:
         return False
-    elif temp < 18.0:
+    elif temp < 30.0:
         return True
     return None # no command
     
