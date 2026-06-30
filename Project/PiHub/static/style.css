@@ -81,6 +81,31 @@ h1 {
 
 /* ---------- Heartbeat LED ---------- */
 
+/* ---------- Clickable Actuator Cards ---------- */
+
+#lighting-card, #heating-card {
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.1s;
+}
+
+#lighting-card:hover, #heating-card:hover {
+    transform: scale(1.03);
+    border-color: #3b82f6;
+}
+
+#lighting-card:active, #heating-card:active {
+    transform: scale(0.97);
+}
+
+.override-indicator {
+    font-size: 0.75rem;
+    color: #f97316;
+    margin-top: 8px;
+    min-height: 1em;
+}
+
+/* ---------- Heartbeat LED ---------- */
+
 .status-led {
     width: 18px;
     height: 18px;

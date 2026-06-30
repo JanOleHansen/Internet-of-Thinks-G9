@@ -50,6 +50,13 @@ ACK_TIMEOUT = 2.0
 MAX_RETRIES = 3
 act_client = None
 
+def is_override_active(device: str) -> bool:
+    key = f"{device}_override_until"
+    until_str = system_state["actuator"].get(key)
+    if until_str is None:
+        return False
+    return datetime.now() < datetime.fromisoformat(until_str)
+
 # Sending commands
 def build_message(sequence_number: int, command: int) -> bytearray:
     message = bytearray()
@@ -229,51 +236,57 @@ async def evaluate_rules():
     window = system_state["window"]
     actuator = system_state["actuator"]
     while True:
-        if all(v is not None for v in
-               (window["state"], environment["humidity"], environment["motion"],
-                environment["temperature"], environment["light"])):
+        try:
+            if all(v is not None for v in
+                   (window["state"], environment["humidity"], environment["motion"],
+                    environment["temperature"], environment["light"])):
 
-            window_res = checkWindow(window["state"], environment["temperature"], environment["humidity"])
-            if window_res == True: # open the window
-                send_command_with_retry()
-            elif window_res == False: # close the window
-                pass
+                window_res = checkWindow(window["state"], environment["temperature"], environment["humidity"])
+                if window_res == True: # open the window
+                    pass
+                elif window_res == False: # close the window
+                    pass
 
-            heating_res = checkHeating(environment["temperature"], window["state"])
-            if heating_res == True and actuator["heating"] == "off":
-                if act_client is not None:
-                    try:
-                        if await send_command_with_retry(act_client, COMMAND_HEATING_ON):
-                            actuator["heating"] = "on"
-                            print("Heating turned ON")
-                    except Exception as e:
-                        print(f"Heating ON command failed: {e}")
-            elif heating_res == False and actuator["heating"] == "on":
-                if act_client is not None:
-                    try:
-                        if await send_command_with_retry(act_client, COMMAND_HEATING_OFF):
-                            actuator["heating"] = "off"
-                            print("Heating turned OFF")
-                    except Exception as e:
-                        print(f"Heating OFF command failed: {e}")
+                heating_res = checkHeating(environment["temperature"], window["state"])
+                if not is_override_active("heating"):
+                    if heating_res == True and actuator["heating"] == "off":
+                        if act_client is not None:
+                            try:
+                                if await send_command_with_retry(act_client, COMMAND_HEATING_ON):
+                                    actuator["heating"] = "on"
+                                    print("Heating turned ON")
+                            except Exception as e:
+                                print(f"Heating ON command failed: {e}")
+                    elif heating_res == False and actuator["heating"] == "on":
+                        if act_client is not None:
+                            try:
+                                if await send_command_with_retry(act_client, COMMAND_HEATING_OFF):
+                                    actuator["heating"] = "off"
+                                    print("Heating turned OFF")
+                            except Exception as e:
+                                print(f"Heating OFF command failed: {e}")
 
-            light_res = checkLight(environment["light"], environment["motion"], light_on_time, datetime.now())
-            if light_res == True and actuator["lighting"] == "off":
-                if act_client is not None:
-                    try:
-                        if await send_command_with_retry(act_client, COMMAND_LIGHT_ON):
-                            actuator["lighting"] = "on"
-                            print("Light turned ON")
-                    except Exception as e:
-                        print(f"Light ON command failed: {e}")
-            elif light_res == False and actuator["lighting"] == "on":
-                if act_client is not None:
-                    try:
-                        if await send_command_with_retry(act_client, COMMAND_LIGHT_OFF):
-                            actuator["lighting"] = "off"
-                            print("Light turned OFF")
-                    except Exception as e:
-                        print(f"Light OFF command failed: {e}")
+                light_res = checkLight(environment["light"], environment["motion"], light_on_time, datetime.now())
+                if not is_override_active("lighting"):
+                    if light_res == True and actuator["lighting"] == "off":
+                        if act_client is not None:
+                            try:
+                                if await send_command_with_retry(act_client, COMMAND_LIGHT_ON):
+                                    actuator["lighting"] = "on"
+                                    print("Light turned ON")
+                            except Exception as e:
+                                print(f"Light ON command failed: {e}")
+                    elif light_res == False and actuator["lighting"] == "on":
+                        if act_client is not None:
+                            try:
+                                if await send_command_with_retry(act_client, COMMAND_LIGHT_OFF):
+                                    actuator["lighting"] = "off"
+                                    print("Light turned OFF")
+                            except Exception as e:
+                                print(f"Light OFF command failed: {e}")
+
+        except Exception as e:
+            print(f"evaluate_rules error: {e}")
 
         await asyncio.sleep(1)
 
